@@ -1,0 +1,2893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Home Ledger</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/": "https://esm.sh/react@18.3.1/",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "recharts": "https://esm.sh/recharts@2?external=react,react-dom",
+    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react,react-dom",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+  }
+}
+</script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#1e1b4b" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Home Ledger" />
+<style>
+  html, body { margin:0; padding:0; background:#f5f5f4; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+</script>
+
+<script type="text/babel" data-type="module" data-presets="react">
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from "recharts";
+import {
+  Home, Car, Zap, ShoppingBag, HeartPulse, Film, BookOpen, CreditCard, MoreHorizontal,
+  UtensilsCrossed, Plus, X, Search, Download, Users, User, TrendingUp, TrendingDown, Wallet,
+  AlertTriangle, Check, Trash2, Calendar, RefreshCw, PiggyBank, Settings as SettingsIcon,
+  ArrowUpRight, ArrowDownRight, Upload, HandCoins, LayoutGrid, ListTree, Landmark, Repeat, Stamp, Lock, Pencil, ChevronDown,
+  LogOut, Mail, KeyRound, UserCheck, Clock, ShieldCheck,
+} from "lucide-react";
+import { initializeApp } from "firebase/app";
+import {
+  getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
+} from "firebase/auth";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, arrayUnion, collection, deleteDoc,
+} from "firebase/firestore";
+
+/* ---------------------------------- firebase ---------------------------------- */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCZMo2oxxhXGiiRqEoZUO4ngIqX-XZa6hI",
+  authDomain: "bhilare-s-blessed-and-abundant.firebaseapp.com",
+  projectId: "bhilare-s-blessed-and-abundant",
+  storageBucket: "bhilare-s-blessed-and-abundant.firebasestorage.app",
+  messagingSenderId: "121253483408",
+  appId: "1:121253483408:web:d12be775a0741db1361915",
+};
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+const allowlistRef = doc(db, "allowlist", "main");
+const ledgerRef = doc(db, "ledger", "main");
+const requestsCol = collection(db, "requests");
+
+/* ---------------------------------- constants ---------------------------------- */
+
+const ICONS = {
+  UtensilsCrossed, Home, Car, Zap, ShoppingBag, HeartPulse, Film, BookOpen, CreditCard,
+  MoreHorizontal, HandCoins, Landmark,
+};
+const ICON_CHOICES = Object.keys(ICONS);
+const PLACE_ICONS = { Landmark, Wallet, PiggyBank, TrendingUp, CreditCard, HandCoins, MoreHorizontal };
+const PLACE_ICON_CHOICES = Object.keys(PLACE_ICONS);
+const ALL_ICONS = { ...ICONS, ...PLACE_ICONS };
+const AVATAR_CHOICES = ["🧑", "👨", "👩", "👴", "👵", "🧔", "👦", "👧", "🧑‍💼", "🧑‍🎓"];
+const COLOR_CHOICES = ["#1e3a5f", "#0f766e", "#b45309", "#9d174d", "#4338ca", "#15803d", "#a21caf", "#b91c1c"];
+
+const CURRENCY = "₹";
+const fmt = (n) => `${CURRENCY}${Math.round(n || 0).toLocaleString("en-IN")}`;
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const monthKeyOf = (d) => (d || "").slice(0, 7);
+const thisMonthKey = () => todayISO().slice(0, 7);
+const monthLabel = (mk) => {
+  const [y, m] = mk.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+};
+const uid = (p = "id") => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+function canSee() {
+  return true;
+}
+
+const STORAGE_KEY = "home-ledger-data-v1";
+
+const DEFAULT_MEMBERS = [
+  { id: "m1", name: "Papa", isIncomeSource: true, color: "#1e3a5f", avatar: "👨", sharedWith: [], budget: 25000 },
+  { id: "m2", name: "Mummy", isIncomeSource: true, color: "#9d174d", avatar: "👩", sharedWith: [], budget: 18000 },
+  { id: "m3", name: "Chintu", isIncomeSource: false, color: "#0f766e", avatar: "🧑‍🎓", sharedWith: [], budget: 4000 },
+];
+
+const DEFAULT_CATEGORIES = [
+  { id: "food", name: "Food & Groceries", icon: "UtensilsCrossed", color: "#b45309", budgetLimit: 8000 },
+  { id: "rent", name: "Rent & Housing", icon: "Home", color: "#1e3a5f", budgetLimit: 15000 },
+  { id: "travel", name: "Travel & Transport", icon: "Car", color: "#0369a1", budgetLimit: 3000 },
+  { id: "utilities", name: "Utilities", icon: "Zap", color: "#a16207", budgetLimit: 2500 },
+  { id: "shopping", name: "Shopping", icon: "ShoppingBag", color: "#be185d", budgetLimit: 4000 },
+  { id: "health", name: "Healthcare", icon: "HeartPulse", color: "#b91c1c", budgetLimit: 2000 },
+  { id: "entertainment", name: "Entertainment", icon: "Film", color: "#7e22ce", budgetLimit: 1500 },
+  { id: "education", name: "Education", icon: "BookOpen", color: "#0f766e", budgetLimit: 2000 },
+  { id: "debt", name: "Debt Payment", icon: "CreditCard", color: "#57534e", budgetLimit: 0, isSystem: true },
+  { id: "other", name: "Other", icon: "MoreHorizontal", color: "#78716c", budgetLimit: 1000 },
+];
+
+function seedTransactions() {
+  const now = new Date();
+  const mk = (offsetMonths, day) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - offsetMonths, day);
+    return d.toISOString().slice(0, 10);
+  };
+  return [
+    { id: uid("t"), type: "income", amount: 62000, memberId: "m1", categoryId: null, date: mk(0, 1), note: "Salary", paidFrom: [], recurringId: null },
+    { id: uid("t"), type: "income", amount: 45000, memberId: "m2", categoryId: null, date: mk(0, 1), note: "Salary", paidFrom: [], recurringId: null },
+    { id: uid("t"), type: "expense", amount: 15000, memberId: "m1", categoryId: "rent", date: mk(0, 2), note: "House rent", paidFrom: [{ memberId: "m1", amount: 15000 }], recurringId: null },
+    { id: uid("t"), type: "expense", amount: 3200, memberId: "m3", categoryId: "food", date: mk(0, 5), note: "Weekly groceries", paidFrom: [{ memberId: "m1", amount: 1600 }, { memberId: "m2", amount: 1600 }], recurringId: null },
+    { id: uid("t"), type: "expense", amount: 1800, memberId: "m3", categoryId: "entertainment", date: mk(0, 8), note: "Movie + dinner", paidFrom: [{ memberId: "m2", amount: 1800 }], recurringId: null },
+    { id: uid("t"), type: "expense", amount: 2100, memberId: "m1", categoryId: "utilities", date: mk(0, 10), note: "Electricity bill", paidFrom: [{ memberId: "m1", amount: 1050 }, { memberId: "m2", amount: 1050 }], recurringId: null },
+    { id: uid("t"), type: "income", amount: 60000, memberId: "m1", categoryId: null, date: mk(1, 1), note: "Salary", paidFrom: [], recurringId: null },
+    { id: uid("t"), type: "income", amount: 45000, memberId: "m2", categoryId: null, date: mk(1, 1), note: "Salary", paidFrom: [], recurringId: null },
+    { id: uid("t"), type: "expense", amount: 15000, memberId: "m1", categoryId: "rent", date: mk(1, 2), note: "House rent", paidFrom: [{ memberId: "m1", amount: 15000 }], recurringId: null },
+    { id: uid("t"), type: "expense", amount: 4600, memberId: "m3", categoryId: "shopping", date: mk(1, 12), note: "Clothes", paidFrom: [{ memberId: "m1", amount: 2300 }, { memberId: "m2", amount: 2300 }], recurringId: null },
+    { id: uid("t"), type: "expense", amount: 2600, memberId: "m3", categoryId: "food", date: mk(1, 15), note: "Groceries", paidFrom: [{ memberId: "m1", amount: 1300 }, { memberId: "m2", amount: 1300 }], recurringId: null },
+  ];
+}
+
+function seedDebts() {
+  return [
+    {
+      id: uid("d"), personName: "Rakesh (Neighbour)", direction: "owed_to_me", totalAmount: 5000, dueDate: "", note: "Lent for emergency", memberId: "m1",
+    },
+    {
+      id: uid("d"), personName: "Bajaj Finserv", direction: "i_owe", totalAmount: 24000, dueDate: "", note: "Fridge EMI loan", memberId: "m2",
+    },
+    {
+      id: uid("d"), personName: "Chintu → Papa", direction: "owed_to_me", internal: true, fromMember: "m3", toMember: "m1", totalAmount: 1200, dueDate: "", note: "Cricket kit", settled: true,
+      settledDate: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 20).toISOString().slice(0, 10),
+    },
+  ];
+}
+
+function seedRecurring() {
+  return [
+    { id: uid("r"), type: "expense", amount: 15000, categoryId: "rent", memberId: "m1", paidFromMode: "equal", note: "House rent", dayOfMonth: 2, active: true },
+    { id: uid("r"), type: "income", amount: 62000, categoryId: null, memberId: "m1", paidFromMode: null, note: "Salary", dayOfMonth: 1, active: true },
+    { id: uid("r"), type: "income", amount: 45000, categoryId: null, memberId: "m2", paidFromMode: null, note: "Salary", dayOfMonth: 1, active: true },
+  ];
+}
+
+function seedPlaces() {
+  return [
+    { id: uid("pl"), name: "SBI Savings Account", icon: "Landmark", color: "#1e3a5f", balance: 42000, ownerId: "m1" },
+    { id: uid("pl"), name: "Cash at home", icon: "Wallet", color: "#0f766e", balance: 3500, ownerId: null },
+    { id: uid("pl"), name: "HDFC SIP", icon: "TrendingUp", color: "#9d174d", balance: 85000, ownerId: "m2" },
+  ];
+}
+
+function seedData() {
+  return {
+    members: DEFAULT_MEMBERS,
+    categories: DEFAULT_CATEGORIES,
+    transactions: seedTransactions(),
+    debts: seedDebts(),
+    recurring: seedRecurring(),
+    recurringLog: {},
+    places: seedPlaces(),
+    settings: { overallBudget: 32000 },
+  };
+}
+
+/* ---------------------------------- small ui bits ---------------------------------- */
+
+function IconBadge({ iconName, color, size = "md" }) {
+  const Icon = ALL_ICONS[iconName] || MoreHorizontal;
+  const dims = size === "sm" ? "w-8 h-8" : size === "lg" ? "w-14 h-14" : "w-10 h-10";
+  const iconDims = size === "sm" ? 14 : size === "lg" ? 24 : 18;
+  return (
+    <div
+      className={`${dims} rounded-full flex items-center justify-center border-2 border-dashed shrink-0`}
+      style={{ backgroundColor: `${color}1a`, borderColor: color, color }}
+    >
+      <Icon size={iconDims} strokeWidth={2} />
+    </div>
+  );
+}
+
+function Avatar({ member, size = "md" }) {
+  const dims = size === "sm" ? "w-7 h-7 text-sm" : size === "lg" ? "w-12 h-12 text-2xl" : "w-9 h-9 text-lg";
+  return (
+    <div
+      className={`${dims} rounded-full flex items-center justify-center shrink-0 ring-2 ring-white shadow`}
+      style={{ backgroundColor: `${member?.color || "#78716c"}22` }}
+      title={member?.name}
+    >
+      {member?.avatar || "🧑"}
+    </div>
+  );
+}
+
+function ProgressBar({ pct, tone = "ok" }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const color = tone === "over" ? "bg-rose-600" : tone === "warn" ? "bg-amber-500" : "bg-emerald-600";
+  return (
+    <div className="w-full h-2 rounded-full bg-stone-200 overflow-hidden">
+      <div className={`h-full ${color} transition-all`} style={{ width: `${clamped}%` }} />
+    </div>
+  );
+}
+
+function Pill({ active, onClick, children, icon: Icon }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap ${
+        active ? "bg-indigo-950 text-amber-50" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+      }`}
+    >
+      {Icon && <Icon size={14} />}
+      {children}
+    </button>
+  );
+}
+
+function Card({ children, className = "" }) {
+  return (
+    <div className={`bg-white rounded-2xl border border-stone-200 shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function Modal({ title, onClose, children, wide }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-900/50 p-0 sm:p-4">
+      <div className={`bg-stone-50 w-full ${wide ? "sm:max-w-lg" : "sm:max-w-md"} sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 sticky top-0 bg-stone-50 z-10">
+          <h3 className="font-serif text-lg text-indigo-950">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-stone-200 text-stone-500">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="block mb-3.5">
+      <span className="block text-xs font-semibold text-stone-500 mb-1.5 uppercase tracking-wide">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputCls = "w-full px-3 py-2.5 rounded-lg border border-stone-300 bg-white text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm";
+
+/* ---------------------------------- language / translations ---------------------------------- */
+
+const TRANSLATIONS = {
+  appName: { en: "Home Ledger", mr: "घर हिशोब" },
+  tagline: { en: "Shared family ledger", mr: "कुटुंबाचा हिशोब" },
+  loading: { en: "Loading your ledger...", mr: "हिशोब लोड होत आहे..." },
+  saveFailed: { en: "Couldn't save — check your connection.", mr: "सेव्ह होऊ शकले नाही — कनेक्शन तपासा." },
+  recurringPending: { en: "recurring entries pending for", mr: "आवर्ती नोंदी प्रलंबित आहेत" },
+  review: { en: "Review", mr: "पहा" },
+  family: { en: "Family", mr: "कुटुंब" },
+  dashboard: { en: "Dashboard", mr: "डॅशबोर्ड" },
+  transactions: { en: "Split / Transaction", mr: "खर्च / व्यवहार" },
+  income: { en: "Income", mr: "उत्पन्न" },
+  places: { en: "Places", mr: "खाती" },
+  budgets: { en: "Budgets", mr: "बजेट" },
+  debts: { en: "Debts", mr: "उधारी" },
+  recurring: { en: "Recurring", mr: "आवर्ती" },
+  settings: { en: "Settings", mr: "सेटिंग्ज" },
+  onlyTheseSee: { en: "Only these people can see individual spending. Everyone else sees family totals only.", mr: "फक्त हीच माणसे वैयक्तिक खर्च पाहू शकतात. बाकी सर्वांना फक्त कुटुंबाची एकूण रक्कम दिसते." },
+  moneyEverywhere: { en: "Bank accounts, cash, investments — all your money in one place", mr: "बँक खाती, रोख रक्कम, गुंतवणूक — सर्व पैसे एका जागी" },
+  add: { en: "Add", mr: "जोडा" },
+  edit: { en: "Edit", mr: "बदला" },
+  delete: { en: "Delete", mr: "काढा" },
+  save: { en: "Save", mr: "सेव्ह करा" },
+  cancel: { en: "Cancel", mr: "रद्द करा" },
+  close: { en: "Close", mr: "बंद करा" },
+  search: { en: "Search", mr: "शोधा" },
+};
+
+const LangContext = React.createContext({ lang: "en", t: (k) => TRANSLATIONS[k]?.en || k });
+function useLang() {
+  return React.useContext(LangContext);
+}
+
+/* ---------------------------------- app ---------------------------------- */
+
+/* ---------------------------------- auth / access gate ---------------------------------- */
+
+function FullScreenLoader({ label }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-stone-50">
+      <div className="flex flex-col items-center gap-3 text-stone-400">
+        <RefreshCw className="animate-spin" size={28} />
+        <span className="text-sm font-medium">{label}</span>
+      </div>
+    </div>
+  );
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState("signin"); // signin | signup
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function friendlyError(code) {
+    if (code === "auth/email-already-in-use") return "That email already has an account — try signing in instead.";
+    if (code === "auth/invalid-email") return "That doesn't look like a valid email address.";
+    if (code === "auth/weak-password") return "Password should be at least 6 characters.";
+    if (code === "auth/wrong-password" || code === "auth/invalid-credential") return "Wrong email or password.";
+    if (code === "auth/user-not-found") return "No account with that email — try signing up instead.";
+    if (code === "auth/too-many-requests") return "Too many attempts — please wait a moment and try again.";
+    return "Something went wrong. Please try again.";
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setError("");
+    if (!email || !password) return;
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        await createUserWithEmailAndPassword(auth, email.trim(), password);
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+      }
+    } catch (e) {
+      setError(friendlyError(e.code));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center gap-2 mb-6">
+          <div className="w-14 h-14 rounded-full bg-indigo-950 flex items-center justify-center text-amber-400">
+            <Stamp size={26} />
+          </div>
+          <h1 className="font-serif text-2xl text-indigo-950">Home Ledger</h1>
+          <p className="text-xs text-stone-500">Shared family ledger</p>
+        </div>
+        <Card className="p-5">
+          <div className="flex gap-1.5 mb-4 bg-stone-100 rounded-full p-1">
+            <button
+              onClick={() => { setMode("signin"); setError(""); }}
+              className={`flex-1 text-sm font-semibold rounded-full py-1.5 transition-colors ${mode === "signin" ? "bg-indigo-950 text-amber-50" : "text-stone-500"}`}
+            >
+              Sign in
+            </button>
+            <button
+              onClick={() => { setMode("signup"); setError(""); }}
+              className={`flex-1 text-sm font-semibold rounded-full py-1.5 transition-colors ${mode === "signup" ? "bg-indigo-950 text-amber-50" : "text-stone-500"}`}
+            >
+              Sign up
+            </button>
+          </div>
+          <form onSubmit={submit} className="space-y-3">
+            <Field label="Email">
+              <div className="relative">
+                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="email" required autoComplete="email" value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputCls + " pl-9"} placeholder="you@example.com"
+                />
+              </div>
+            </Field>
+            <Field label="Password">
+              <div className="relative">
+                <KeyRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="password" required minLength={6}
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  className={inputCls + " pl-9"} placeholder="At least 6 characters"
+                />
+              </div>
+            </Field>
+            {error && <p className="text-xs text-rose-600">{error}</p>}
+            <button
+              type="submit" disabled={busy}
+              className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-50"
+            >
+              {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+            </button>
+          </form>
+        </Card>
+        {mode === "signup" && (
+          <p className="text-[11px] text-stone-400 text-center mt-4 leading-relaxed">
+            After signing up, an existing family member will need to approve your account before you can see the ledger.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PendingScreen({ email, onSignOut }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
+      <div className="w-full max-w-sm text-center">
+        <div className="w-14 h-14 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4">
+          <Clock size={26} />
+        </div>
+        <h2 className="font-serif text-xl text-indigo-950 mb-1.5">Waiting for approval</h2>
+        <p className="text-sm text-stone-500 leading-relaxed mb-1">
+          Your account (<span className="font-medium">{email}</span>) has been created.
+        </p>
+        <p className="text-sm text-stone-500 leading-relaxed mb-6">
+          Ask a family member who's already in the app to approve you from Settings → Family access. This page will update automatically once you're approved.
+        </p>
+        <button onClick={onSignOut} className="text-xs font-semibold text-stone-500 bg-stone-100 px-4 py-2 rounded-full inline-flex items-center gap-1.5">
+          <LogOut size={13} /> Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [authUser, setAuthUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [allowlist, setAllowlist] = useState(undefined); // undefined = checking, null = doesn't exist yet
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [requests, setRequests] = useState([]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setAuthUser(u);
+      setAuthChecked(true);
+      if (!u) setAllowlist(undefined);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) return;
+    const unsub = onSnapshot(allowlistRef, (snap) => {
+      setAllowlist(snap.exists() ? snap.data() : null);
+    });
+    return unsub;
+  }, [authUser]);
+
+  useEffect(() => {
+    (async () => {
+      if (!authUser || allowlist !== null || bootstrapping) return;
+      setBootstrapping(true);
+      try {
+        const snap = await getDoc(allowlistRef);
+        if (!snap.exists()) {
+          await setDoc(allowlistRef, {
+            ownerUid: authUser.uid,
+            approvedUids: [authUser.uid],
+            emails: { [authUser.uid]: authUser.email || "" },
+          });
+          await setDoc(ledgerRef, seedData());
+        }
+      } catch (e) {
+        // ignore; onSnapshot above will retry state on next change
+      }
+      setBootstrapping(false);
+    })();
+  }, [authUser, allowlist, bootstrapping]);
+
+  const isApproved = !!(authUser && allowlist && allowlist.approvedUids?.includes(authUser.uid));
+  const isOwner = !!(authUser && allowlist && allowlist.ownerUid === authUser.uid);
+
+  useEffect(() => {
+    (async () => {
+      if (!authUser || !allowlist || isApproved) return;
+      try {
+        await setDoc(doc(db, "requests", authUser.uid), { email: authUser.email || "", requestedAt: Date.now() }, { merge: true });
+      } catch (e) {}
+    })();
+  }, [authUser, allowlist, isApproved]);
+
+  useEffect(() => {
+    if (!isOwner) { setRequests([]); return; }
+    const unsub = onSnapshot(requestsCol, (snap) => {
+      setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [isOwner]);
+
+  async function approveRequest(uid, email) {
+    await updateDoc(allowlistRef, {
+      approvedUids: arrayUnion(uid),
+      [`emails.${uid}`]: email || "",
+    });
+    await deleteDoc(doc(db, "requests", uid));
+  }
+  async function denyRequest(uid) {
+    await deleteDoc(doc(db, "requests", uid));
+  }
+  async function transferOwnership(uid) {
+    await updateDoc(allowlistRef, { ownerUid: uid });
+  }
+  function handleSignOut() {
+    signOut(auth);
+  }
+
+  if (!authChecked) return <FullScreenLoader label="Loading…" />;
+  if (!authUser) return <AuthScreen />;
+  if (allowlist === undefined || bootstrapping) return <FullScreenLoader label="Setting things up…" />;
+  if (!isApproved) return <PendingScreen email={authUser.email} onSignOut={handleSignOut} />;
+
+  return (
+    <Ledger
+      user={authUser}
+      isOwner={isOwner}
+      requests={requests}
+      allowlist={allowlist}
+      onApprove={approveRequest}
+      onDeny={denyRequest}
+      onSignOut={handleSignOut}
+      onTransferOwner={transferOwnership}
+    />
+  );
+}
+
+function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignOut, onTransferOwner }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saveError, setSaveError] = useState(false);
+  const [tab, setTab] = useState("dashboard");
+  const [viewMode, setViewMode] = useState("family");
+  const [lang, setLang] = useState("en");
+  const t = (key) => TRANSLATIONS[key]?.[lang] || TRANSLATIONS[key]?.en || key;
+  const [showAddTx, setShowAddTx] = useState(null);
+  const [editTx, setEditTx] = useState(null);
+  const [showMembers, setShowMembers] = useState(false);
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
+  const [showAddRecurring, setShowAddRecurring] = useState(false);
+  const [showAddDebt, setShowAddDebt] = useState(false);
+  const [payDebt, setPayDebt] = useState(null);
+  const [filters, setFilters] = useState({ q: "", category: "all", member: "all", from: "", to: "" });
+  const [incomeFilters, setIncomeFilters] = useState({ q: "", category: "all", member: "all", from: "", to: "" });
+
+  const goToCategory = (categoryId) => {
+    setFilters({ q: "", category: categoryId, member: "all", from: "", to: "" });
+    setTab("transactions");
+  };
+
+  useEffect(() => {
+    let seeding = false;
+    const unsub = onSnapshot(
+      ledgerRef,
+      async (snap) => {
+        if (snap.exists()) {
+          setData(snap.data());
+          setLoading(false);
+        } else if (isOwner && !seeding) {
+          seeding = true;
+          const seed = seedData();
+          try {
+            await setDoc(ledgerRef, seed);
+          } catch (e) {}
+        } else {
+          setLoading(false);
+        }
+      },
+      () => setLoading(false)
+    );
+    return unsub;
+  }, [isOwner]);
+
+  useEffect(() => {
+    if (data && viewMode !== "family" && !data.members.some((m) => m.id === viewMode)) {
+      setViewMode("family");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, viewMode]);
+
+  async function persist(next) {
+    setData(next);
+    try {
+      await setDoc(ledgerRef, next);
+      setSaveError(false);
+    } catch (e) {
+      setSaveError(true);
+    }
+  }
+
+  /* ---------- mutators ---------- */
+  const addTransaction = (tx) => {
+    const newTx = { id: uid("t"), ...tx };
+    let places = data.places || [];
+    if (newTx.placeId) {
+      const delta = newTx.type === "income" ? newTx.amount : -newTx.amount;
+      places = places.map((p) => (p.id === newTx.placeId ? { ...p, balance: (p.balance || 0) + delta } : p));
+    }
+    persist({ ...data, transactions: [newTx, ...data.transactions], places });
+  };
+  // Adds an expense and, optionally, a family IOU debt (member B owes member A)
+  // in a single save so both land together.
+  const addTransactionWithDebt = (tx, loan) => {
+    const newTx = { id: uid("t"), ...tx };
+    let places = data.places || [];
+    if (newTx.placeId) {
+      const delta = newTx.type === "income" ? newTx.amount : -newTx.amount;
+      places = places.map((p) => (p.id === newTx.placeId ? { ...p, balance: (p.balance || 0) + delta } : p));
+    }
+    let debts = data.debts;
+    if (loan && loan.amount > 0 && loan.lenderId && loan.borrowerId && loan.lenderId !== loan.borrowerId) {
+      const lender = data.members.find((m) => m.id === loan.lenderId);
+      const borrower = data.members.find((m) => m.id === loan.borrowerId);
+      debts = [
+        ...debts,
+        {
+          id: uid("d"),
+          personName: `${borrower?.name || "?"} → ${lender?.name || "?"}`,
+          direction: "owed_to_me",
+          internal: true,
+          fromMember: loan.borrowerId,
+          toMember: loan.lenderId,
+          totalAmount: loan.amount,
+          dueDate: "",
+          note: newTx.note || loan.label || "",
+        },
+      ];
+    }
+    persist({ ...data, transactions: [newTx, ...data.transactions], places, debts });
+  };
+  const deleteTransaction = (id) => {
+    const tx = data.transactions.find((t) => t.id === id);
+    let places = data.places || [];
+    if (tx && tx.placeId) {
+      const delta = tx.type === "income" ? -tx.amount : tx.amount;
+      places = places.map((p) => (p.id === tx.placeId ? { ...p, balance: (p.balance || 0) + delta } : p));
+    }
+    persist({ ...data, transactions: data.transactions.filter((t) => t.id !== id), places });
+  };
+  const updateTransaction = (id, patch) => {
+    const old = data.transactions.find((t) => t.id === id);
+    if (!old) return;
+    const updated = { ...old, ...patch };
+    let places = data.places || [];
+    // 1) reverse the old transaction's effect on its place
+    if (old.placeId) {
+      const revert = old.type === "income" ? -old.amount : old.amount;
+      places = places.map((p) => (p.id === old.placeId ? { ...p, balance: (p.balance || 0) + revert } : p));
+    }
+    // 2) apply the updated transaction's effect on its (possibly new) place
+    if (updated.placeId) {
+      const apply = updated.type === "income" ? updated.amount : -updated.amount;
+      places = places.map((p) => (p.id === updated.placeId ? { ...p, balance: (p.balance || 0) + apply } : p));
+    }
+    persist({ ...data, transactions: data.transactions.map((t) => (t.id === id ? updated : t)), places });
+  };
+  const addPlace = (p) => persist({ ...data, places: [...(data.places || []), { id: uid("pl"), ...p }] });
+  const updatePlace = (id, patch) => persist({ ...data, places: (data.places || []).map((p) => (p.id === id ? { ...p, ...patch } : p)) });
+  const deletePlace = (id) =>
+    persist({
+      ...data,
+      places: (data.places || []).filter((p) => p.id !== id),
+      transactions: data.transactions.map((t) => (t.placeId === id ? { ...t, placeId: null } : t)),
+    });
+  const adjustPlace = (id, delta) =>
+    persist({ ...data, places: (data.places || []).map((p) => (p.id === id ? { ...p, balance: (p.balance || 0) + delta } : p)) });
+  const addMember = (m) => persist({ ...data, members: [...data.members, { id: uid("m"), ...m }] });
+  const updateMember = (id, patch) => persist({ ...data, members: data.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
+  const deleteMember = (id) => persist({ ...data, members: data.members.filter((m) => m.id !== id) });
+  const updateCategory = (id, patch) => persist({ ...data, categories: data.categories.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
+  const addCategory = (c) => {
+    const newCat = { id: uid("cat"), ...c };
+    persist({ ...data, categories: [...data.categories, newCat] });
+    return newCat;
+  };
+  const deleteCategory = (id) => persist({ ...data, categories: data.categories.filter((c) => c.id !== id) });
+  const addDebt = (d) => persist({ ...data, debts: [...data.debts, { id: uid("d"), ...d }] });
+  const deleteDebt = (id) => persist({ ...data, debts: data.debts.filter((d) => d.id !== id), transactions: data.transactions.filter((t) => t.debtId !== id) });
+  const settleDebt = (id) => persist({ ...data, debts: data.debts.map((d) => (d.id === id ? { ...d, settled: true, settledDate: todayISO() } : d)) });
+  const reopenDebt = (id) => persist({ ...data, debts: data.debts.map((d) => (d.id === id ? { ...d, settled: false, settledDate: "" } : d)) });
+  const addRecurring = (r) => persist({ ...data, recurring: [...data.recurring, { id: uid("r"), ...r }] });
+  const toggleRecurring = (id) => persist({ ...data, recurring: data.recurring.map((r) => (r.id === id ? { ...r, active: !r.active } : r)) });
+  const deleteRecurring = (id) => persist({ ...data, recurring: data.recurring.filter((r) => r.id !== id) });
+  const updateSettings = (patch) => persist({ ...data, settings: { ...data.settings, ...patch } });
+
+  const applyRecurring = (r) => {
+    const paidFrom =
+      r.type === "expense"
+        ? splitEqually(r.amount, incomeMembers.map((m) => m.id))
+        : [];
+    const date = `${thisMonthKey()}-${String(r.dayOfMonth || 1).padStart(2, "0")}`;
+    addTransaction({
+      type: r.type, amount: r.amount, categoryId: r.categoryId, memberId: r.memberId,
+      date, note: r.note, paidFrom, recurringId: r.id, debtId: null,
+    });
+  };
+
+  const resetDemo = () => persist(seedData());
+  const clearAll = () => persist({ members: [], categories: DEFAULT_CATEGORIES, transactions: [], debts: [], recurring: [], recurringLog: {}, settings: { overallBudget: 0 } });
+
+  /* ---------- derived ---------- */
+  const incomeMembers = useMemo(() => (data ? data.members.filter((m) => m.isIncomeSource) : []), [data]);
+
+  const currentMonthTx = useMemo(
+    () => (data ? data.transactions.filter((t) => monthKeyOf(t.date) === thisMonthKey()) : []),
+    [data]
+  );
+
+  const categorySpendThisMonth = (catId) =>
+    currentMonthTx.filter((t) => t.type === "expense" && t.categoryId === catId).reduce((s, t) => s + t.amount, 0);
+
+  const familyTotals = useMemo(() => {
+    if (!data) return { income: 0, expense: 0 };
+    const income = currentMonthTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const expense = currentMonthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+    return { income, expense };
+  }, [currentMonthTx, data]);
+
+  const netWorth = useMemo(() => {
+    if (!data) return 0;
+    const allIncome = data.transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const allExpense = data.transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+    const cash = allIncome - allExpense;
+    const owedToMe = data.debts.filter((d) => d.direction === "owed_to_me" && !d.internal).reduce((s, d) => s + Math.max(0, d.totalAmount - paidOnDebt(d.id)), 0);
+    const iOwe = data.debts.filter((d) => d.direction === "i_owe" && !d.internal).reduce((s, d) => s + Math.max(0, d.totalAmount - paidOnDebt(d.id)), 0);
+    return cash + owedToMe - iOwe;
+  }, [data]);
+
+  function paidOnDebt(debtId) {
+    return data.transactions.filter((t) => t.debtId === debtId).reduce((s, t) => s + t.amount, 0);
+  }
+
+  const memberBalance = (memberId) => {
+    const income = data.transactions.filter((t) => t.type === "income" && t.memberId === memberId).reduce((s, t) => s + t.amount, 0);
+    const funded = data.transactions
+      .filter((t) => t.type === "expense")
+      .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === memberId).reduce((x, p) => x + p.amount, 0), 0);
+    return income - funded;
+  };
+  const memberIncomeThisMonth = (memberId) =>
+    currentMonthTx.filter((t) => t.type === "income" && t.memberId === memberId).reduce((s, t) => s + t.amount, 0);
+  const memberFundedThisMonth = (memberId) =>
+    currentMonthTx
+      .filter((t) => t.type === "expense")
+      .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === memberId).reduce((x, p) => x + p.amount, 0), 0);
+  const memberSpentThisMonth = (memberId) =>
+    currentMonthTx.filter((t) => t.type === "expense" && t.memberId === memberId).reduce((s, t) => s + t.amount, 0);
+  const memberCategoryBreakdown = (memberId) =>
+    data.categories
+      .map((c) => ({
+        name: c.name,
+        color: c.color,
+        value: currentMonthTx.filter((t) => t.type === "expense" && t.memberId === memberId && t.categoryId === c.id).reduce((s, t) => s + t.amount, 0),
+      }))
+      .filter((d) => d.value > 0);
+  const memberOwnTransactions = (memberId) =>
+    data.transactions.filter((t) => t.type === "expense" && t.memberId === memberId).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
+  const toggleShareWith = (ownerId, targetId) => {
+    const owner = data.members.find((m) => m.id === ownerId);
+    if (!owner) return;
+    const list = owner.sharedWith || [];
+    const next = list.includes(targetId) ? list.filter((id) => id !== targetId) : [...list, targetId];
+    updateMember(ownerId, { sharedWith: next });
+  };
+
+  const pendingRecurring = useMemo(() => {
+    if (!data) return [];
+    return data.recurring.filter(
+      (r) => r.active && !data.transactions.some((t) => t.recurringId === r.id && monthKeyOf(t.date) === thisMonthKey())
+    );
+  }, [data]);
+
+  const monthlyTrend = useMemo(() => {
+    if (!data) return [];
+    return buildTrendSeries(
+      data.transactions, data.categories,
+      (d) => monthKeyOf(d),
+      (k) => monthLabel(k),
+      (k) => monthLabel(k),
+    ).slice(-6);
+  }, [data]);
+
+  const yearlyTrend = useMemo(() => {
+    if (!data) return [];
+    return buildTrendSeries(
+      data.transactions, data.categories,
+      (d) => (d || "").slice(0, 4),
+      (k) => k,
+      (k) => `Year ${k}`,
+    );
+  }, [data]);
+
+  const dailyThisMonth = useMemo(() => {
+    if (!data) return [];
+    const mk = thisMonthKey();
+    return buildTrendSeries(
+      data.transactions.filter((t) => monthKeyOf(t.date) === mk),
+      data.categories,
+      (d) => d,
+      (k) => new Date(k).toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+      (k) => new Date(k).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" }),
+    );
+  }, [data]);
+
+  const categoryPie = useMemo(() => {
+    if (!data) return [];
+    return data.categories
+      .map((c) => ({ id: c.id, name: c.name, value: categorySpendThisMonth(c.id), color: c.color }))
+      .filter((d) => d.value > 0);
+  }, [data, currentMonthTx]);
+
+  // Shared filtering + deep search used by both the Split/Transaction tab
+  // (expenses) and the Income tab. `typeWanted` limits to "expense" or "income".
+  const runFilter = (f, typeWanted) => {
+    if (!data) return [];
+    const searchBlob = (t) => {
+      const cat = data.categories.find((c) => c.id === t.categoryId);
+      const mem = data.members.find((m) => m.id === t.memberId);
+      const place = (data.places || []).find((p) => p.id === t.placeId);
+      const splitNames = (t.paidFrom || [])
+        .map((p) => data.members.find((m) => m.id === p.memberId)?.name)
+        .filter(Boolean);
+      return [t.note, cat?.name, mem?.name, place?.name, t.type, t.date, String(Math.round(t.amount || 0)), ...splitNames]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    };
+    // Multiple words must all match: "electricity ramesh" narrows to both.
+    const terms = (f.q || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return data.transactions
+      .filter((t) => (typeWanted ? t.type === typeWanted : true))
+      .filter((t) => (f.category === "all" ? true : t.categoryId === f.category))
+      .filter((t) => (f.member === "all" ? true : t.memberId === f.member || (t.paidFrom || []).some((p) => p.memberId === f.member)))
+      .filter((t) => (f.from ? t.date >= f.from : true))
+      .filter((t) => (f.to ? t.date <= f.to : true))
+      .filter((t) => {
+        if (terms.length === 0) return true;
+        const blob = searchBlob(t);
+        return terms.every((term) => blob.includes(term));
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  };
+  // Split / Transaction tab shows expenses only.
+  const filteredTx = useMemo(() => runFilter(filters, "expense"), [data, filters]);
+  // Income tab shows income only.
+  const filteredIncome = useMemo(() => runFilter(incomeFilters, "income"), [data, incomeFilters]);
+
+  function splitEqually(amount, memberIds) {
+    if (!memberIds.length) return [];
+    const each = Math.floor((amount / memberIds.length) * 100) / 100;
+    const rem = Math.round((amount - each * memberIds.length) * 100) / 100;
+    return memberIds.map((id, i) => ({ memberId: id, amount: i === 0 ? each + rem : each }));
+  }
+
+  function exportCSV() {
+    const rows = [["Date", "Type", "Amount", "Category", "Spent By", "Paid From", "Note"]];
+    data.transactions.forEach((t) => {
+      const cat = data.categories.find((c) => c.id === t.categoryId)?.name || "";
+      const member = data.members.find((m) => m.id === t.memberId)?.name || "";
+      const paid = (t.paidFrom || []).map((p) => `${data.members.find((m) => m.id === p.memberId)?.name || "?"}:${p.amount}`).join(" | ");
+      rows.push([t.date, t.type, t.amount, cat, member, paid, t.note || ""]);
+    });
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    downloadBlob(csv, "home-ledger-transactions.csv", "text/csv");
+  }
+  function exportJSON() {
+    downloadBlob(JSON.stringify(data, null, 2), "home-ledger-backup.json", "application/json");
+  }
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  function importJSON(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        if (parsed.members && parsed.transactions) persist(parsed);
+      } catch (err) {}
+    };
+    reader.readAsText(file);
+  }
+
+  /* ---------- loading ---------- */
+  if (loading || !data) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center bg-stone-50 rounded-2xl">
+        <div className="flex flex-col items-center gap-3 text-stone-400">
+          <RefreshCw className="animate-spin" size={28} />
+          <span className="text-sm font-medium">{lang === "mr" ? TRANSLATIONS.loading.mr : TRANSLATIONS.loading.en}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const selectedMember = viewMode !== "family" ? data.members.find((m) => m.id === viewMode) : null;
+
+  return (
+    <LangContext.Provider value={{ lang, t }}>
+    <div className="w-full min-h-screen bg-stone-50 text-stone-800 font-sans">
+      {/* header */}
+      <div className="bg-indigo-950 text-amber-50 px-4 sm:px-6 pt-5 pb-4 rounded-b-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-indigo-950">
+              <Stamp size={20} />
+            </div>
+            <div>
+              <h1 className="font-serif text-xl leading-tight">{t("appName")}</h1>
+              <p className="text-xs text-indigo-300 tracking-wide">{t("tagline")}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setLang(lang === "en" ? "mr" : "en")}
+              className="text-xs font-semibold bg-indigo-800 text-indigo-100 rounded-full px-3 py-1.5"
+            >
+              {lang === "en" ? "मराठी" : "English"}
+            </button>
+            <button onClick={() => setShowMembers(true)} className="flex items-center -space-x-2">
+              {data.members.slice(0, 4).map((m) => (
+                <Avatar key={m.id} member={m} size="sm" />
+              ))}
+              <div className="w-7 h-7 rounded-full bg-indigo-800 flex items-center justify-center text-[10px] ml-1 ring-2 ring-indigo-950">
+                <SettingsIcon size={12} />
+              </div>
+            </button>
+            <button onClick={onSignOut} title="Sign out" className="w-8 h-8 rounded-full bg-indigo-800 flex items-center justify-center text-indigo-100">
+              <LogOut size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* family/individual toggle */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          <Pill active={viewMode === "family"} onClick={() => setViewMode("family")} icon={Users}>
+            {t("family")}
+          </Pill>
+          {data.members.map((m) => (
+            <Pill key={m.id} active={viewMode === m.id} onClick={() => setViewMode(m.id)} icon={User}>
+              {m.name}
+            </Pill>
+          ))}
+        </div>
+      </div>
+
+      {saveError && (
+        <div className="mx-4 mt-3 text-sm bg-rose-50 text-rose-700 border border-rose-200 rounded-lg px-3 py-2 flex items-center gap-2">
+          <AlertTriangle size={14} /> {t("saveFailed")}
+        </div>
+      )}
+
+      {/* pending recurring banner */}
+      {pendingRecurring.length > 0 && (
+        <button
+          onClick={() => setShowRecurringModal(true)}
+          className="w-full text-left mx-4 mt-3 bg-amber-100 border border-amber-300 text-amber-900 rounded-xl px-4 py-3 flex items-center justify-between gap-2"
+          style={{ width: "calc(100% - 2rem)" }}
+        >
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <Repeat size={16} /> {pendingRecurring.length} {t("recurringPending")} {monthLabel(thisMonthKey())}
+          </span>
+          <span className="text-xs underline">{t("review")}</span>
+        </button>
+      )}
+
+      {/* tabs */}
+      <div className="flex gap-1.5 px-4 mt-4 overflow-x-auto pb-1">
+        {[
+          ["dashboard", t("dashboard"), LayoutGrid],
+          ["transactions", t("transactions"), ListTree],
+          ["income", t("income"), TrendingUp],
+          ["places", t("places"), Wallet],
+          ["budgets", t("budgets"), PiggyBank],
+          ["debts", t("debts"), Landmark],
+          ["recurring", t("recurring"), Repeat],
+          ["settings", t("settings"), SettingsIcon],
+        ].map(([id, label, Icon]) => (
+          <Pill key={id} active={tab === id} onClick={() => setTab(id)} icon={Icon}>
+            {label}
+          </Pill>
+        ))}
+      </div>
+
+      <div className="px-4 py-5 max-w-3xl mx-auto">
+        {tab === "dashboard" && (
+          <Dashboard
+            data={data}
+            viewMode={viewMode}
+            selectedMember={selectedMember}
+            familyTotals={familyTotals}
+            netWorth={netWorth}
+            memberIncomeThisMonth={memberIncomeThisMonth}
+            memberFundedThisMonth={memberFundedThisMonth}
+            memberSpentThisMonth={memberSpentThisMonth}
+            memberCategoryBreakdown={memberCategoryBreakdown}
+            memberOwnTransactions={memberOwnTransactions}
+            categoryPie={categoryPie}
+            monthlyTrend={monthlyTrend}
+            yearlyTrend={yearlyTrend}
+            dailyThisMonth={dailyThisMonth}
+            categorySpendThisMonth={categorySpendThisMonth}
+            onAddTx={(type) => setShowAddTx(type)}
+            onCategoryClick={goToCategory}
+            onUpdateMember={updateMember}
+          />
+        )}
+
+        {tab === "transactions" && (
+          <TransactionsTab
+            data={data}
+            mode="expense"
+            filters={filters}
+            setFilters={setFilters}
+            filteredTx={filteredTx}
+            incomeMembers={incomeMembers}
+            onDelete={deleteTransaction}
+            onEdit={(t) => setEditTx(t)}
+            onAdd={(type) => setShowAddTx(type)}
+          />
+        )}
+
+        {tab === "income" && (
+          <TransactionsTab
+            data={data}
+            mode="income"
+            filters={incomeFilters}
+            setFilters={setIncomeFilters}
+            filteredTx={filteredIncome}
+            incomeMembers={incomeMembers}
+            onDelete={deleteTransaction}
+            onEdit={(t) => setEditTx(t)}
+            onAdd={(type) => setShowAddTx(type)}
+          />
+        )}
+
+        {tab === "places" && (
+          <PlacesTab
+            data={data}
+            onAddPlace={addPlace}
+            onUpdatePlace={updatePlace}
+            onDeletePlace={deletePlace}
+            onAdjustPlace={adjustPlace}
+          />
+        )}
+
+        {tab === "budgets" && (
+          <BudgetsTab
+            data={data}
+            categorySpendThisMonth={categorySpendThisMonth}
+            familyTotals={familyTotals}
+            onUpdateCategory={updateCategory}
+            onAddCategory={addCategory}
+            onDeleteCategory={deleteCategory}
+            onUpdateSettings={updateSettings}
+            onCategoryClick={goToCategory}
+          />
+        )}
+
+        {tab === "debts" && (
+          <DebtsTab
+            data={data}
+            paidOnDebt={paidOnDebt}
+            onAdd={() => setShowAddDebt(true)}
+            onPay={(d) => setPayDebt(d)}
+            onDelete={deleteDebt}
+            onSettle={settleDebt}
+            onReopen={reopenDebt}
+          />
+        )}
+
+        {tab === "recurring" && (
+          <RecurringTab
+            data={data}
+            onAdd={() => setShowAddRecurring(true)}
+            onToggle={toggleRecurring}
+            onDelete={deleteRecurring}
+            onApply={applyRecurring}
+            pendingIds={pendingRecurring.map((r) => r.id)}
+          />
+        )}
+
+        {tab === "settings" && (
+          <SettingsTab
+            data={data}
+            onExportCSV={exportCSV}
+            onExportJSON={exportJSON}
+            onImportJSON={importJSON}
+            onManageMembers={() => setShowMembers(true)}
+            onResetDemo={resetDemo}
+            onClearAll={clearAll}
+            user={user}
+            isOwner={isOwner}
+            requests={requests}
+            onApprove={onApprove}
+            onDeny={onDeny}
+            onSignOut={onSignOut}
+            allowlist={allowlist}
+            onTransferOwner={onTransferOwner}
+          />
+        )}
+      </div>
+
+      {/* floating add button */}
+      {(tab === "dashboard" || tab === "transactions" || tab === "income") && (
+        <div className="fixed bottom-5 right-5 flex flex-col gap-2 items-end z-30">
+          <button
+            onClick={() => setShowAddTx("income")}
+            className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2.5 rounded-full shadow-lg text-sm font-semibold"
+          >
+            <ArrowUpRight size={16} /> Income
+          </button>
+          <button
+            onClick={() => setShowAddTx("expense")}
+            className="flex items-center gap-1.5 bg-rose-600 text-white px-4 py-2.5 rounded-full shadow-lg text-sm font-semibold"
+          >
+            <ArrowDownRight size={16} /> Expense
+          </button>
+        </div>
+      )}
+
+      {/* modals */}
+      {(showAddTx || editTx) && (
+        <AddTransactionModal
+          type={editTx ? editTx.type : showAddTx}
+          editingTx={editTx}
+          data={data}
+          incomeMembers={incomeMembers}
+          onClose={() => { setShowAddTx(null); setEditTx(null); }}
+          onSave={(tx, loan) => {
+            addTransactionWithDebt(tx, loan);
+            setShowAddTx(null);
+          }}
+          onUpdate={(id, patch) => {
+            updateTransaction(id, patch);
+            setEditTx(null);
+          }}
+          onAddCategory={addCategory}
+        />
+      )}
+
+      {showMembers && (
+        <MembersModal
+          data={data}
+          onClose={() => setShowMembers(false)}
+          onAdd={addMember}
+          onUpdate={updateMember}
+          onDelete={deleteMember}
+        />
+      )}
+
+      {showRecurringModal && (
+        <Modal title="Recurring entries pending" onClose={() => setShowRecurringModal(false)}>
+          <div className="space-y-3">
+            {pendingRecurring.map((r) => {
+              const cat = data.categories.find((c) => c.id === r.categoryId);
+              const mem = data.members.find((m) => m.id === r.memberId);
+              return (
+                <div key={r.id} className="flex items-center justify-between bg-white border border-stone-200 rounded-xl p-3">
+                  <div className="flex items-center gap-3">
+                    {cat ? <IconBadge iconName={cat.icon} color={cat.color} size="sm" /> : <Avatar member={mem} size="sm" />}
+                    <div>
+                      <div className="text-sm font-medium">{r.note}</div>
+                      <div className="text-xs text-stone-400">
+                        {r.type === "income" ? "Income" : "Expense"} · {fmt(r.amount)}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => applyRecurring(r)}
+                    className="text-xs font-semibold bg-emerald-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1"
+                  >
+                    <Check size={13} /> Add
+                  </button>
+                </div>
+              );
+            })}
+            {pendingRecurring.length === 0 && <p className="text-sm text-stone-400 text-center py-4">{lang === "mr" ? "सर्व नोंदी झाल्या 🎉" : "All entries added 🎉"}</p>}
+          </div>
+        </Modal>
+      )}
+
+      {showAddDebt && (
+        <AddDebtModal members={data.members} onClose={() => setShowAddDebt(false)} onSave={(d) => { addDebt(d); setShowAddDebt(false); }} />
+      )}
+
+      {payDebt && (
+        <PayDebtModal
+          debt={payDebt}
+          data={data}
+          incomeMembers={incomeMembers}
+          paidSoFar={paidOnDebt(payDebt.id)}
+          onClose={() => setPayDebt(null)}
+          onSave={(tx) => {
+            addTransaction(tx);
+            setPayDebt(null);
+          }}
+        />
+      )}
+
+      {showAddRecurring && (
+        <AddRecurringModal
+          data={data}
+          incomeMembers={incomeMembers}
+          onClose={() => setShowAddRecurring(false)}
+          onSave={(r) => { addRecurring(r); setShowAddRecurring(false); }}
+        />
+      )}
+    </div>
+    </LangContext.Provider>
+  );
+}
+
+/* ---------------------------------- Dashboard ---------------------------------- */
+
+// Builds an income/expense series bucketed by keyOf(date), enriched with net,
+// transaction count, and the top spending category for that bucket.
+function buildTrendSeries(transactions, categories, keyOf, labelOf, titleOf) {
+  const catName = (id) => (categories.find((c) => c.id === id) || {}).name || "Other";
+  const map = {};
+  transactions.forEach((t) => {
+    const k = keyOf(t.date);
+    if (!k) return;
+    if (!map[k]) map[k] = { key: k, income: 0, expense: 0, count: 0, cats: {} };
+    const row = map[k];
+    row[t.type] += t.amount;
+    row.count += 1;
+    if (t.type === "expense") {
+      const nm = catName(t.categoryId);
+      row.cats[nm] = (row.cats[nm] || 0) + t.amount;
+    }
+  });
+  return Object.values(map)
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((r) => {
+      const top = Object.entries(r.cats).sort((a, b) => b[1] - a[1])[0];
+      return {
+        key: r.key,
+        income: r.income,
+        expense: r.expense,
+        count: r.count,
+        net: r.income - r.expense,
+        topCat: top ? top[0] : null,
+        topCatAmount: top ? top[1] : 0,
+        label: labelOf(r.key),
+        title: (titleOf || labelOf)(r.key),
+      };
+    });
+}
+
+function TrendTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl shadow-lg px-3 py-2.5 text-xs min-w-[168px]">
+      <div className="font-semibold text-indigo-950 mb-1.5">{d.title}</div>
+      <div className="flex items-center justify-between gap-4 mb-0.5">
+        <span className="flex items-center gap-1.5 text-stone-500"><span className="w-2 h-2 rounded-full bg-emerald-600" /> Income</span>
+        <span className="font-mono tabular-nums text-emerald-700">{fmt(d.income)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="flex items-center gap-1.5 text-stone-500"><span className="w-2 h-2 rounded-full bg-rose-600" /> Expense</span>
+        <span className="font-mono tabular-nums text-rose-700">{fmt(d.expense)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-4 border-t border-stone-100 mt-1.5 pt-1.5">
+        <span className="text-stone-500">Net</span>
+        <span className={`font-mono tabular-nums font-semibold ${d.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+          {d.net >= 0 ? "+" : "−"}{fmt(Math.abs(d.net))}
+        </span>
+      </div>
+      {d.topCat && (
+        <div className="flex items-center justify-between gap-4 text-stone-400 mt-1">
+          <span>Top spend</span>
+          <span className="text-stone-500 truncate max-w-[95px]">{d.topCat} · {fmt(d.topCatAmount)}</span>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-4 text-stone-400 mt-0.5">
+        <span>Entries</span>
+        <span className="text-stone-500">{d.count}</span>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, memberIncomeThisMonth, memberFundedThisMonth, memberSpentThisMonth, memberCategoryBreakdown, memberOwnTransactions, categoryPie, monthlyTrend, yearlyTrend, dailyThisMonth, categorySpendThisMonth, onAddTx, onCategoryClick, onUpdateMember }) {
+  const [trendView, setTrendView] = useState("monthly");
+  const overallBudget = data.settings.overallBudget || 0;
+  const overallRemaining = overallBudget - familyTotals.expense;
+  const overallPct = overallBudget ? (familyTotals.expense / overallBudget) * 100 : 0;
+
+  // Date-filterable family summary (defaults to the current month).
+  const [range, setRange] = useState(() => ({ from: thisMonthKey() + "-01", to: todayISO() }));
+  const inRange = data.transactions.filter(
+    (t) => (!range.from || t.date >= range.from) && (!range.to || t.date <= range.to)
+  );
+  const rangeIncome = inRange.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const rangeExpense = inRange.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const perPerson = data.members
+    .map((m) => {
+      const income = inRange
+        .filter((t) => t.type === "income" && t.memberId === m.id)
+        .reduce((s, t) => s + t.amount, 0);
+      // money that came out of this person's pocket (their share of expenses)
+      const spentFrom = inRange
+        .filter((t) => t.type === "expense")
+        .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === m.id).reduce((x, p) => x + p.amount, 0), 0);
+      return { m, income, spentFrom };
+    })
+    .filter((r) => r.income > 0 || r.spentFrom > 0);
+
+  return (
+    <div className="space-y-5">
+      {viewMode === "family" ? (
+        <>
+          <Card className="p-5 bg-gradient-to-br from-indigo-950 to-indigo-900 text-amber-50 border-none">
+            <div className="flex items-center gap-2 text-indigo-300 text-xs uppercase tracking-wide mb-1">
+              <Wallet size={13} /> Family Net Worth
+            </div>
+            <div className="font-mono text-3xl font-semibold tabular-nums">{fmt(netWorth)}</div>
+            <p className="text-[11px] text-indigo-300 mt-1">Cash + owed to you − debts you owe</p>
+          </Card>
+
+          <Card className="p-4 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-base text-indigo-950">Family summary</h3>
+              <button
+                type="button"
+                onClick={() => setRange({ from: thisMonthKey() + "-01", to: todayISO() })}
+                className="text-[11px] font-medium text-amber-700 hover:underline"
+              >
+                This month
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">From</label>
+                <input type="date" className={inputCls} value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">Till</label>
+                <input type="date" className={inputCls} value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-emerald-50 p-3">
+                <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-medium mb-1">
+                  <TrendingUp size={13} /> Total family income
+                </div>
+                <div className="font-mono text-xl font-semibold text-emerald-700 tabular-nums">{fmt(rangeIncome)}</div>
+              </div>
+              <div className="rounded-xl bg-rose-50 p-3">
+                <div className="flex items-center gap-1.5 text-rose-700 text-xs font-medium mb-1">
+                  <TrendingDown size={13} /> Total family spent
+                </div>
+                <div className="font-mono text-xl font-semibold text-rose-700 tabular-nums">{fmt(rangeExpense)}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-3 mb-1.5 text-[10px] uppercase tracking-wide text-stone-400">
+                <span className="flex-1">Per person</span>
+                <span className="w-20 text-right">Income</span>
+                <span className="w-20 text-right">Spent</span>
+              </div>
+              <div className="space-y-2">
+                {perPerson.length === 0 && <p className="text-xs text-stone-400 py-1">No activity in this period.</p>}
+                {perPerson.map(({ m, income, spentFrom }) => (
+                  <div key={m.id} className="flex items-center gap-3">
+                    <Avatar member={m} size="sm" />
+                    <span className="text-sm font-medium flex-1 min-w-0 truncate">{m.name}</span>
+                    <span className="w-20 text-right text-xs font-mono text-emerald-700 tabular-nums">{income ? "+" + fmt(income) : "—"}</span>
+                    <span className="w-20 text-right text-xs font-mono text-rose-700 tabular-nums">{spentFrom ? "−" + fmt(spentFrom) : "—"}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-stone-400 mt-2">"Spent" = money paid from that person's own funds.</p>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-semibold text-stone-600">Overall monthly budget</span>
+              <span className={`text-xs font-mono font-semibold ${overallRemaining < 0 ? "text-rose-600" : "text-stone-500"}`}>
+                {overallRemaining < 0 ? `${fmt(Math.abs(overallRemaining))} over` : `${fmt(overallRemaining)} left`}
+              </span>
+            </div>
+            <ProgressBar pct={overallPct} tone={overallPct >= 100 ? "over" : overallPct >= 80 ? "warn" : "ok"} />
+            <div className="text-[11px] text-stone-400 mt-1.5">{fmt(familyTotals.expense)} of {fmt(overallBudget)} spent</div>
+          </Card>
+        </>
+      ) : (
+        selectedMember && (
+          <PersonDashboard
+            member={selectedMember}
+            data={data}
+            onUpdateMember={onUpdateMember}
+            onCategoryClick={onCategoryClick}
+          />
+        )
+      )}
+
+      {viewMode === "family" && (
+      <>
+      <Card className="p-4">
+        <h3 className="font-serif text-base text-indigo-950 mb-3">Category budgets — {monthLabel(thisMonthKey())}</h3>
+        <div className="space-y-3">
+          {data.categories.filter((c) => c.budgetLimit > 0).map((c) => {
+            const spent = categorySpendThisMonth(c.id);
+            const pct = (spent / c.budgetLimit) * 100;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onCategoryClick(c.id)}
+                className="w-full text-left"
+              >
+                <div className="flex items-center gap-2.5 mb-1">
+                  <IconBadge iconName={c.icon} color={c.color} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium truncate">{c.name}</span>
+                      <span className={`text-xs font-mono ${pct >= 100 ? "text-rose-600 font-semibold" : "text-stone-400"}`}>
+                        {fmt(spent)} / {fmt(c.budgetLimit)}
+                      </span>
+                    </div>
+                    <ProgressBar pct={pct} tone={pct >= 100 ? "over" : pct >= 80 ? "warn" : "ok"} />
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {categoryPie.length > 0 && (
+        <Card className="p-4">
+          <h3 className="font-serif text-base text-indigo-950 mb-2">Spending by category — {monthLabel(thisMonthKey())}</h3>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={categoryPie} dataKey="value" nameKey="name" innerRadius={45} outerRadius={80} paddingAngle={2} onClick={(entry) => onCategoryClick(entry.id)} cursor="pointer">
+                  {categoryPie.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => fmt(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1 justify-center">
+            {categoryPie.map((c, i) => (
+              <button key={i} type="button" onClick={() => onCategoryClick(c.id)} className="flex items-center gap-1.5 text-xs text-stone-500">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {monthlyTrend.length > 0 && (() => {
+        const trendData = trendView === "yearly" ? yearlyTrend : trendView === "daily" ? dailyThisMonth : monthlyTrend;
+        const trendTitle = trendView === "yearly" ? "Yearly trend" : trendView === "daily" ? `Daily — ${monthLabel(thisMonthKey())}` : "Monthly trend";
+        const isDaily = trendView === "daily";
+        return (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <h3 className="font-serif text-base text-indigo-950">{trendTitle}</h3>
+            <div className="flex gap-1.5">
+              <Pill active={trendView === "monthly"} onClick={() => setTrendView("monthly")}>Monthly</Pill>
+              <Pill active={trendView === "yearly"} onClick={() => setTrendView("yearly")}>Yearly</Pill>
+              <Pill active={trendView === "daily"} onClick={() => setTrendView("daily")}>This month</Pill>
+            </div>
+          </div>
+          {trendData.length > 0 ? (
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: isDaily ? 10 : 11, fill: "#78716c" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={isDaily ? "preserveStartEnd" : 0}
+                    angle={isDaily ? -30 : 0}
+                    textAnchor={isDaily ? "end" : "middle"}
+                    height={isDaily ? 46 : 20}
+                  />
+                  <YAxis tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} width={40} />
+                  <Tooltip content={<TrendTooltip />} cursor={{ fill: "rgba(30,58,95,0.05)" }} />
+                  <Bar dataKey="income" fill="#059669" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expense" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-sm text-stone-400 py-10 text-center">
+              {isDaily ? `No transactions yet for ${monthLabel(thisMonthKey())}.` : "No transactions yet."}
+            </p>
+          )}
+          <div className="flex items-center justify-center gap-4 mt-1 text-[11px] text-stone-500">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600" /> Income</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-600" /> Expense</span>
+            <span className="text-stone-400">Tap/hover a bar for details</span>
+          </div>
+        </Card>
+        );
+      })()}
+      </>
+      )}
+    </div>
+  );
+}
+
+function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
+  const paidOnDebt = (id) => data.transactions.filter((t) => t.debtId === id).reduce((s, t) => s + t.amount, 0);
+  const monthTx = data.transactions.filter((t) => monthKeyOf(t.date) === thisMonthKey());
+  const incomeThisMonth = monthTx
+    .filter((t) => t.type === "income" && t.memberId === member.id)
+    .reduce((s, t) => s + t.amount, 0);
+  // money that left this person's own pocket this month (their share of expenses)
+  const spentThisMonth = monthTx
+    .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === member.id).reduce((x, p) => x + p.amount, 0), 0);
+
+  // this person's own sources
+  const sources = (data.places || []).filter((p) => p.ownerId === member.id);
+  const sourcesTotal = sources.reduce((s, p) => s + (p.balance || 0), 0);
+
+  // this person's debts (assigned to them) + family IOUs involving them
+  const owedToThem = data.debts.filter(
+    (d) => !isDebtSettled(d, data.transactions) &&
+      ((d.direction === "owed_to_me" && d.memberId === member.id && !d.internal) || (d.internal && d.toMember === member.id))
+  );
+  const theyOwe = data.debts.filter(
+    (d) => !isDebtSettled(d, data.transactions) &&
+      ((d.direction === "i_owe" && d.memberId === member.id && !d.internal) || (d.internal && d.fromMember === member.id))
+  );
+  const owedAmt = owedToThem.reduce((s, d) => s + Math.max(0, d.totalAmount - paidOnDebt(d.id)), 0);
+  const oweAmt = theyOwe.reduce((s, d) => s + Math.max(0, d.totalAmount - paidOnDebt(d.id)), 0);
+  const netWorth = sourcesTotal + owedAmt - oweAmt;
+
+  const budget = member.budget || 0;
+  const budgetPct = budget ? (spentThisMonth / budget) * 100 : 0;
+  const budgetRemaining = budget - spentThisMonth;
+
+  const recentTx = data.transactions
+    .filter((t) => t.type === "expense" && t.memberId === member.id)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 6);
+  const recurringMine = (data.recurring || []).filter((r) => r.memberId === member.id);
+
+  const [budgetInput, setBudgetInput] = useState(String(budget || ""));
+
+  return (
+    <div className="space-y-5">
+      {/* personal net worth */}
+      <Card className="p-5" style={{ background: `linear-gradient(135deg, ${member.color}, ${member.color}cc)` }}>
+        <div className="flex items-center gap-3 mb-3">
+          <Avatar member={member} size="lg" />
+          <div>
+            <div className="font-serif text-lg text-white">{member.name}</div>
+            <div className="text-[11px] text-white/70">Personal net worth</div>
+          </div>
+        </div>
+        <div className="font-mono text-3xl font-semibold text-white tabular-nums">{fmt(netWorth)}</div>
+        <p className="text-[11px] text-white/70 mt-1">Own sources {fmt(sourcesTotal)} + owed {fmt(owedAmt)} − owe {fmt(oweAmt)}</p>
+      </Card>
+
+      {/* income / spent this month */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="p-4">
+          <div className="text-xs font-medium text-emerald-700 mb-1">Income (this month)</div>
+          <div className="font-mono text-lg font-semibold text-emerald-700 tabular-nums">{fmt(incomeThisMonth)}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs font-medium text-rose-700 mb-1">Spent from own funds</div>
+          <div className="font-mono text-lg font-semibold text-rose-700 tabular-nums">{fmt(spentThisMonth)}</div>
+        </Card>
+      </div>
+
+      {/* personal monthly budget */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-sm font-semibold text-stone-600">My monthly budget</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-stone-400">₹</span>
+            <input
+              type="number"
+              className="w-24 px-2 py-1 rounded-lg border border-stone-300 text-sm text-right"
+              value={budgetInput}
+              onChange={(e) => setBudgetInput(e.target.value)}
+              onBlur={() => onUpdateMember(member.id, { budget: Number(budgetInput) || 0 })}
+            />
+          </div>
+        </div>
+        {budget > 0 ? (
+          <>
+            <ProgressBar pct={budgetPct} tone={budgetPct >= 100 ? "over" : budgetPct >= 80 ? "warn" : "ok"} />
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-[11px] text-stone-400">{fmt(spentThisMonth)} of {fmt(budget)} spent</span>
+              <span className={`text-[11px] font-mono font-semibold ${budgetRemaining < 0 ? "text-rose-600" : "text-stone-500"}`}>
+                {budgetRemaining < 0 ? `${fmt(Math.abs(budgetRemaining))} over` : `${fmt(budgetRemaining)} left`}
+              </span>
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] text-stone-400">Set a monthly budget above to track it.</p>
+        )}
+      </Card>
+
+      {/* my sources */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-serif text-base text-indigo-950">My sources</h3>
+          <span className="font-mono text-sm font-semibold text-stone-600 tabular-nums">{fmt(sourcesTotal)}</span>
+        </div>
+        <div className="space-y-2">
+          {sources.map((p) => (
+            <div key={p.id} className="flex items-center gap-2.5">
+              <IconBadge iconName={p.icon} color={p.color} size="sm" />
+              <span className="text-sm flex-1 min-w-0 truncate">{p.name}</span>
+              <span className={`font-mono text-sm tabular-nums ${p.balance < 0 ? "text-rose-600" : "text-stone-500"}`}>{fmt(p.balance)}</span>
+            </div>
+          ))}
+          {sources.length === 0 && <p className="text-xs text-stone-400">No sources yet. Add one in the Places tab and set "Belongs to" this person.</p>}
+        </div>
+      </Card>
+
+      {/* my debts */}
+      {(owedToThem.length > 0 || theyOwe.length > 0) && (
+        <Card className="p-4">
+          <h3 className="font-serif text-base text-indigo-950 mb-2">My debts</h3>
+          {owedToThem.length > 0 && (
+            <div className="mb-2">
+              <div className="text-[11px] uppercase tracking-wide text-emerald-700 mb-1">Owed to {member.name}</div>
+              {owedToThem.map((d) => (
+                <div key={d.id} className="flex items-center justify-between text-sm py-0.5">
+                  <span className="truncate">{d.personName}</span>
+                  <span className="font-mono text-emerald-700 tabular-nums">{fmt(Math.max(0, d.totalAmount - paidOnDebt(d.id)))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {theyOwe.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-rose-700 mb-1">{member.name} owes</div>
+              {theyOwe.map((d) => (
+                <div key={d.id} className="flex items-center justify-between text-sm py-0.5">
+                  <span className="truncate">{d.personName}</span>
+                  <span className="font-mono text-rose-700 tabular-nums">{fmt(Math.max(0, d.totalAmount - paidOnDebt(d.id)))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* my recurring */}
+      {recurringMine.length > 0 && (
+        <Card className="p-4">
+          <h3 className="font-serif text-base text-indigo-950 mb-2">My recurring</h3>
+          <div className="space-y-1.5">
+            {recurringMine.map((r) => (
+              <div key={r.id} className="flex items-center justify-between text-sm">
+                <span className="truncate">{r.note || (r.type === "income" ? "Income" : "Expense")} · day {r.dayOfMonth}</span>
+                <span className={`font-mono tabular-nums ${r.type === "income" ? "text-emerald-700" : "text-rose-700"}`}>
+                  {r.type === "income" ? "+" : "−"}{fmt(r.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* recent spends */}
+      <Card className="p-4">
+        <h3 className="font-serif text-base text-indigo-950 mb-2">Recent spends</h3>
+        <div className="space-y-2">
+          {recentTx.map((t) => {
+            const cat = data.categories.find((c) => c.id === t.categoryId);
+            return (
+              <div key={t.id} className="flex items-center gap-2.5">
+                {cat && <IconBadge iconName={cat.icon} color={cat.color} size="sm" />}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate">{t.note || cat?.name}</div>
+                  <div className="text-[10px] text-stone-400">{t.date}</div>
+                </div>
+                <span className="font-mono text-sm text-rose-700">{fmt(t.amount)}</span>
+              </div>
+            );
+          })}
+          {recentTx.length === 0 && <p className="text-xs text-stone-400">No spends yet.</p>}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ShareAccessCard({ owner, allMembers, onToggle }) {
+  const others = allMembers.filter((m) => m.id !== owner.id);
+  const shared = owner.sharedWith || [];
+  return (
+    <Card className="p-4">
+      <h3 className="font-serif text-base text-indigo-950 mb-1">Share my spending with</h3>
+      <p className="text-xs text-stone-400 mb-3">{useLang().t("onlyTheseSee")}</p>
+      <div className="flex flex-wrap gap-2">
+        {others.map((m) => {
+          const active = shared.includes(m.id);
+          return (
+            <button
+              key={m.id}
+              onClick={() => onToggle(owner.id, m.id)}
+              className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border text-xs font-medium transition-colors ${
+                active ? "bg-emerald-600 text-white border-emerald-600" : "bg-stone-100 text-stone-500 border-stone-200"
+              }`}
+            >
+              <Avatar member={m} size="sm" />
+              {m.name}
+              {active && <Check size={12} />}
+            </button>
+          );
+        })}
+        {others.length === 0 && <p className="text-xs text-stone-400">Koi aur member nahi hai.</p>}
+      </div>
+    </Card>
+  );
+}
+
+/* ---------------------------------- Transactions ---------------------------------- */
+
+function TransactionsTab({ data, mode = "expense", filters, setFilters, filteredTx, incomeMembers, onDelete, onEdit, onAdd }) {
+  const isIncome = mode === "income";
+  const memberOptions = isIncome ? (incomeMembers || []) : data.members;
+  return (
+    <div className="space-y-4">
+      <Card className="p-3.5 space-y-2.5">
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            className={`${inputCls} pl-9`}
+            placeholder={isIncome ? "Search income — e.g. salary, Ramesh, 50000…" : "Search anything — e.g. electricity, Ramesh, rent, 5000…"}
+            value={filters.q}
+            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+          />
+        </div>
+        <div className={isIncome ? "" : "grid grid-cols-2 gap-2"}>
+          {!isIncome && (
+            <select className={inputCls} value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}>
+              <option value="all">All categories</option>
+              {data.categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+          <select className={inputCls} value={filters.member} onChange={(e) => setFilters({ ...filters, member: e.target.value })}>
+            <option value="all">{isIncome ? "All sources" : "All members"}</option>
+            {memberOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">From</label>
+            <input type="date" className={inputCls} value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">Till</label>
+            <input type="date" className={inputCls} value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+          </div>
+        </div>
+      </Card>
+
+      <div className="space-y-2">
+        {filteredTx.map((t) => {
+          const cat = data.categories.find((c) => c.id === t.categoryId);
+          const mem = data.members.find((m) => m.id === t.memberId);
+          return (
+            <Card key={t.id} className="p-3.5 flex items-center gap-3">
+              {cat ? <IconBadge iconName={cat.icon} color={cat.color} /> : <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700"><ArrowUpRight size={18} /></div>}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium truncate">
+                    {t.note || (t.type === "income" ? "Income" : cat?.name)}
+                  </span>
+                  <span className={`font-mono text-sm font-semibold tabular-nums shrink-0 ${t.type === "income" ? "text-emerald-700" : "text-rose-700"}`}>
+                    {t.type === "income" ? "+" : "−"}{fmt(t.amount)}
+                  </span>
+                </div>
+                <div className="text-[11px] text-stone-400 flex items-center gap-1.5 mt-0.5">
+                  <Calendar size={11} /> {t.date} · {mem?.name || "—"}
+                  {t.paidFrom?.length > 0 && (
+                    <span className="truncate"> · paid by {t.paidFrom.map((p) => data.members.find((m) => m.id === p.memberId)?.name).join(", ")}</span>
+                  )}
+                  {t.placeId && (data.places || []).find((p) => p.id === t.placeId) && (
+                    <span className="truncate"> · {data.places.find((p) => p.id === t.placeId)?.name}</span>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => onEdit(t)} className="text-stone-300 hover:text-indigo-700 p-1" title="Edit / correct">
+                <Pencil size={15} />
+              </button>
+              <button onClick={() => onDelete(t.id)} className="text-stone-300 hover:text-rose-600 p-1" title="Delete">
+                <Trash2 size={15} />
+              </button>
+            </Card>
+          );
+        })}
+        {filteredTx.length === 0 && <p className="text-center text-sm text-stone-400 py-8">Koi transaction nahi mila.</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- Places ---------------------------------- */
+
+function PlacesTab({ data, onAddPlace, onUpdatePlace, onDeletePlace, onAdjustPlace }) {
+  const [showNew, setShowNew] = useState(false);
+  const [adjusting, setAdjusting] = useState(null);
+  const places = data.places || [];
+  const total = places.reduce((s, p) => s + (p.balance || 0), 0);
+  const adjustingPlace = places.find((p) => p.id === adjusting);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 bg-gradient-to-br from-indigo-950 to-indigo-900 text-amber-50 border-none">
+        <div className="flex items-center gap-2 text-indigo-300 text-xs uppercase tracking-wide mb-1">
+          <Wallet size={13} /> Total across places
+        </div>
+        <div className="font-mono text-3xl font-semibold tabular-nums">{fmt(total)}</div>
+        <p className="text-xs text-indigo-300 mt-1">{useLang().t("moneyEverywhere")}</p>
+      </Card>
+
+      <div className="flex items-center justify-between">
+        <h3 className="font-serif text-base text-indigo-950">Your places</h3>
+        <button onClick={() => setShowNew(true)} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full flex items-center gap-1">
+          <Plus size={13} /> Place
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {places.map((p) => (
+          <Card key={p.id} className="p-3.5">
+            <div className="flex items-center gap-3">
+              <IconBadge iconName={p.icon} color={p.color} size="sm" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                  {p.name}
+                  {p.ownerId
+                    ? <span className="text-[9px] uppercase tracking-wide bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded-full">{data.members.find((m) => m.id === p.ownerId)?.name || "?"}</span>
+                    : <span className="text-[9px] uppercase tracking-wide bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">shared</span>}
+                </div>
+                <div className={`font-mono text-sm tabular-nums ${p.balance < 0 ? "text-rose-600" : "text-stone-500"}`}>
+                  {fmt(p.balance)}
+                </div>
+              </div>
+              <button
+                onClick={() => setAdjusting(p.id)}
+                className="text-xs font-semibold text-indigo-950 bg-stone-100 px-2.5 py-1.5 rounded-lg shrink-0"
+              >
+                Adjust
+              </button>
+              <button onClick={() => onDeletePlace(p.id)} className="text-stone-300 hover:text-rose-600 p-1 shrink-0">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </Card>
+        ))}
+        {places.length === 0 && (
+          <p className="text-center text-sm text-stone-400 py-8">
+            Koi place add nahi kiya abhi tak. Bank account, cash, SIP — jahan bhi paisa rakha hai, add karo.
+          </p>
+        )}
+      </div>
+
+      {showNew && (
+        <Modal title="New place" onClose={() => setShowNew(false)}>
+          <NewPlaceForm members={data.members} onSave={(p) => { onAddPlace(p); setShowNew(false); }} />
+        </Modal>
+      )}
+
+      {adjustingPlace && (
+        <Modal title={`Adjust — ${adjustingPlace.name}`} onClose={() => setAdjusting(null)}>
+          <AdjustPlaceForm
+            currentBalance={adjustingPlace.balance}
+            onSave={(delta) => { onAdjustPlace(adjusting, delta); setAdjusting(null); }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function NewPlaceForm({ onSave, members = [] }) {
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("Wallet");
+  const [color, setColor] = useState(COLOR_CHOICES[0]);
+  const [balance, setBalance] = useState(0);
+  const [ownerId, setOwnerId] = useState("");
+  return (
+    <div>
+      <Field label="Name">
+        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SBI Savings, Cash, HDFC SIP" />
+      </Field>
+      <Field label="Belongs to">
+        <select className={inputCls} value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+          <option value="">Shared / Family</option>
+          {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Icon">
+        <div className="flex flex-wrap gap-2">
+          {PLACE_ICON_CHOICES.map((ic) => (
+            <button key={ic} onClick={() => setIcon(ic)} className={icon === ic ? "ring-2 ring-amber-500 rounded-full" : ""}>
+              <IconBadge iconName={ic} color={color} size="sm" />
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Color">
+        <div className="flex flex-wrap gap-2">
+          {COLOR_CHOICES.map((c) => (
+            <button key={c} onClick={() => setColor(c)} className="w-7 h-7 rounded-full border-2" style={{ backgroundColor: c, borderColor: c === color ? "#1e293b" : "transparent" }} />
+          ))}
+        </div>
+      </Field>
+      <Field label="Starting balance">
+        <input type="number" className={inputCls} value={balance} onChange={(e) => setBalance(Number(e.target.value))} />
+      </Field>
+      <button
+        disabled={!name}
+        onClick={() => onSave({ name, icon, color, balance: Number(balance) || 0, ownerId: ownerId || null })}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        Save place
+      </button>
+    </div>
+  );
+}
+
+function AdjustPlaceForm({ currentBalance, onSave }) {
+  const [mode, setMode] = useState("add");
+  const [amount, setAmount] = useState("");
+  const amt = Number(amount) || 0;
+  const preview = mode === "add" ? (currentBalance || 0) + amt : (currentBalance || 0) - amt;
+  return (
+    <div>
+      <div className="flex gap-2 mb-3">
+        <Pill active={mode === "add"} onClick={() => setMode("add")}>+ Add money</Pill>
+        <Pill active={mode === "subtract"} onClick={() => setMode("subtract")}>− Withdraw</Pill>
+      </div>
+      <Field label="Amount">
+        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+      </Field>
+      <p className="text-[11px] text-stone-400 mb-3">New balance will be {fmt(preview)}</p>
+      <button
+        disabled={!amt}
+        onClick={() => onSave(mode === "add" ? amt : -amt)}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        {mode === "add" ? "Add to balance" : "Withdraw from balance"}
+      </button>
+    </div>
+  );
+}
+
+/* ---------------------------------- Budgets ---------------------------------- */
+
+function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCategory, onAddCategory, onDeleteCategory, onUpdateSettings, onCategoryClick }) {
+  const [editing, setEditing] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <Field label="Overall monthly budget">
+          <input
+            type="number"
+            className={inputCls}
+            value={data.settings.overallBudget}
+            onChange={(e) => onUpdateSettings({ overallBudget: Number(e.target.value) })}
+          />
+        </Field>
+        <p className="text-xs text-stone-400">
+          {fmt(familyTotals.expense)} spent of {fmt(data.settings.overallBudget)} this month.
+        </p>
+      </Card>
+
+      <div className="flex items-center justify-between">
+        <h3 className="font-serif text-base text-indigo-950">Category limits</h3>
+        <button onClick={() => setShowNew(true)} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full flex items-center gap-1">
+          <Plus size={13} /> Category
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {data.categories.map((c) => {
+          const spent = categorySpendThisMonth(c.id);
+          const pct = c.budgetLimit ? (spent / c.budgetLimit) * 100 : 0;
+          return (
+            <Card key={c.id} className="p-3.5">
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => onCategoryClick(c.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                  <IconBadge iconName={c.icon} color={c.color} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">{c.name}</div>
+                    {c.budgetLimit > 0 && <ProgressBar pct={pct} tone={pct >= 100 ? "over" : pct >= 80 ? "warn" : "ok"} />}
+                  </div>
+                </button>
+                {editing === c.id ? (
+                  <input
+                    autoFocus
+                    type="number"
+                    className="w-24 px-2 py-1.5 rounded-lg border border-stone-300 text-sm font-mono"
+                    defaultValue={c.budgetLimit}
+                    onBlur={(e) => { onUpdateCategory(c.id, { budgetLimit: Number(e.target.value) }); setEditing(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                  />
+                ) : (
+                  <button onClick={() => setEditing(c.id)} className="font-mono text-sm text-stone-500 shrink-0">
+                    {fmt(c.budgetLimit)}
+                  </button>
+                )}
+                {!c.isSystem && (
+                  <button onClick={() => onDeleteCategory(c.id)} className="text-stone-300 hover:text-rose-600 p-1">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {showNew && (
+        <Modal title="New category" onClose={() => setShowNew(false)}>
+          <NewCategoryForm onSave={(c) => { onAddCategory(c); setShowNew(false); }} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function NewCategoryForm({ onSave, compact }) {
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("MoreHorizontal");
+  const [color, setColor] = useState(COLOR_CHOICES[0]);
+  const [budget, setBudget] = useState(1000);
+  return (
+    <div>
+      <Field label="Name">
+        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pet care" />
+      </Field>
+      <Field label="Icon">
+        <div className="flex flex-wrap gap-2">
+          {ICON_CHOICES.map((ic) => (
+            <button key={ic} onClick={() => setIcon(ic)} className={icon === ic ? "ring-2 ring-amber-500 rounded-full" : ""}>
+              <IconBadge iconName={ic} color={color} size="sm" />
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Color">
+        <div className="flex flex-wrap gap-2">
+          {COLOR_CHOICES.map((c) => (
+            <button key={c} onClick={() => setColor(c)} className="w-7 h-7 rounded-full border-2" style={{ backgroundColor: c, borderColor: c === color ? "#1e293b" : "transparent" }} />
+          ))}
+        </div>
+      </Field>
+      <Field label="Monthly budget">
+        <input type="number" className={inputCls} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
+      </Field>
+      <button
+        disabled={!name}
+        onClick={() => onSave({ name, icon, color, budgetLimit: budget })}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        {compact ? "Add category" : "Save category"}
+      </button>
+    </div>
+  );
+}
+
+/* ---------------------------------- Debts ---------------------------------- */
+
+// Settlement helpers shared across debt views.
+function debtPaidFrom(debtId, transactions) {
+  return transactions.filter((t) => t.debtId === debtId).reduce((s, t) => s + t.amount, 0);
+}
+function isDebtSettled(d, transactions) {
+  if (d.internal) return !!d.settled;
+  return d.totalAmount > 0 && debtPaidFrom(d.id, transactions) >= d.totalAmount;
+}
+function debtSettledDate(d, transactions) {
+  if (d.internal) return d.settledDate || "";
+  const dates = transactions.filter((t) => t.debtId === d.id).map((t) => t.date).sort();
+  return dates.length ? dates[dates.length - 1] : "";
+}
+const shortDate = (iso) =>
+  iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+
+function DebtsTab({ data, paidOnDebt, onAdd, onPay, onDelete, onSettle, onReopen }) {
+  const [showSettled, setShowSettled] = useState(true);
+  const txs = data.transactions;
+  const settled = (d) => isDebtSettled(d, txs);
+
+  const owedActive = data.debts.filter((d) => d.direction === "owed_to_me" && !settled(d));
+  const oweActive = data.debts.filter((d) => d.direction === "i_owe" && !settled(d));
+  const completed = data.debts
+    .filter((d) => settled(d))
+    .sort((a, b) => debtSettledDate(b, txs).localeCompare(debtSettledDate(a, txs)));
+
+  return (
+    <div className="space-y-5">
+      <button onClick={onAdd} className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5">
+        <Plus size={15} /> Add a debt
+      </button>
+
+      <DebtGroup title="Owed to you" tone="emerald" debts={owedActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} />
+      <DebtGroup title="You owe" tone="rose" debts={oweActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} />
+
+      {completed.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowSettled((s) => !s)}
+            className="w-full flex items-center justify-between mb-2 group"
+          >
+            <h3 className="font-serif text-base text-stone-500">Settled &amp; completed ({completed.length})</h3>
+            <ChevronDown size={18} className={`text-stone-400 transition-transform ${showSettled ? "rotate-180" : ""}`} />
+          </button>
+          {showSettled && (
+            <div className="space-y-2.5">
+              {completed.map((d) => (
+                <SettledDebtCard
+                  key={d.id}
+                  debt={d}
+                  paid={paidOnDebt(d.id)}
+                  settledOn={debtSettledDate(d, txs)}
+                  onDelete={onDelete}
+                  onReopen={onReopen}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle }) {
+  const color = tone === "emerald" ? "text-emerald-700" : "text-rose-700";
+  return (
+    <div>
+      <h3 className={`font-serif text-base mb-2 ${color}`}>{title}</h3>
+      <div className="space-y-2.5">
+        {debts.map((d) => {
+          const paid = paidOnDebt(d.id);
+          const remaining = d.totalAmount - paid;
+          const pct = (paid / d.totalAmount) * 100;
+          return (
+            <Card key={d.id} className="p-4">
+              <div className="flex items-start justify-between gap-2 mb-1.5">
+                <div>
+                  <div className="text-sm font-semibold flex items-center gap-1.5">
+                    {d.personName}
+                    {d.internal && (
+                      <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">family</span>
+                    )}
+                  </div>
+                  {d.note && <div className="text-xs text-stone-400">{d.note}</div>}
+                  {d.dueDate && <div className="text-[11px] text-stone-400">Due {shortDate(d.dueDate)}</div>}
+                </div>
+                <button onClick={() => onDelete(d.id)} className="text-stone-300 hover:text-rose-600 p-1"><Trash2 size={14} /></button>
+              </div>
+              {d.internal ? (
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-sm font-mono font-semibold text-stone-700 tabular-nums">{fmt(d.totalAmount)}</span>
+                  <button onClick={() => onSettle(d.id)} className="text-xs font-semibold bg-emerald-600 text-white px-3 py-1 rounded-full flex items-center gap-1">
+                    <Check size={13} /> Mark repaid
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <ProgressBar pct={pct} tone={remaining <= 0 ? "ok" : "warn"} />
+                  <div className="flex items-center justify-between mt-1.5">
+                    <span className="text-[11px] text-stone-400">{fmt(paid)} of {fmt(d.totalAmount)} settled</span>
+                    <button onClick={() => onPay(d)} className="text-xs font-semibold bg-amber-400 text-indigo-950 px-3 py-1 rounded-full">
+                      Record payment
+                    </button>
+                  </div>
+                </>
+              )}
+            </Card>
+          );
+        })}
+        {debts.length === 0 && <p className="text-xs text-stone-400 py-2">Koi active entry nahi.</p>}
+      </div>
+    </div>
+  );
+}
+
+function SettledDebtCard({ debt: d, paid, settledOn, onDelete, onReopen }) {
+  const toneText = d.direction === "owed_to_me" ? "text-emerald-700" : "text-rose-700";
+  return (
+    <Card className="p-4 bg-stone-50/70">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold flex items-center gap-1.5 text-stone-600">
+            <span className="truncate">{d.personName}</span>
+            {d.internal && (
+              <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">family</span>
+            )}
+            <span className="text-[9px] uppercase tracking-wide bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+              <Check size={9} /> settled
+            </span>
+          </div>
+          {d.note && <div className="text-xs text-stone-400 truncate">{d.note}</div>}
+          <div className="text-[11px] text-stone-400 mt-0.5">
+            <span className={toneText}>{d.direction === "owed_to_me" ? "Was owed to you" : "You owed"}</span>
+            {" · "}{fmt(d.totalAmount)}
+            {settledOn ? ` · cleared ${shortDate(settledOn)}` : ""}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => onReopen(d.id)} title="Reopen" className="text-stone-300 hover:text-amber-600 p-1"><RefreshCw size={13} /></button>
+          <button onClick={() => onDelete(d.id)} title="Delete from history" className="text-stone-300 hover:text-rose-600 p-1"><Trash2 size={13} /></button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function AddDebtModal({ onClose, onSave, members = [] }) {
+  const [personName, setPersonName] = useState("");
+  const [direction, setDirection] = useState("owed_to_me");
+  const [totalAmount, setTotalAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [note, setNote] = useState("");
+  const [memberId, setMemberId] = useState("");
+  return (
+    <Modal title="Add a debt" onClose={onClose}>
+      <Field label="Person / institution">
+        <input className={inputCls} value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="e.g. Ramesh, Bajaj Finserv" />
+      </Field>
+      <Field label="Whose debt? (shows on their dashboard)">
+        <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+          <option value="">Family (no one in particular)</option>
+          {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Direction">
+        <div className="flex gap-2">
+          <Pill active={direction === "owed_to_me"} onClick={() => setDirection("owed_to_me")}>Owed to me</Pill>
+          <Pill active={direction === "i_owe"} onClick={() => setDirection("i_owe")}>I owe</Pill>
+        </div>
+      </Field>
+      <Field label="Total amount">
+        <input type="number" className={inputCls} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} />
+      </Field>
+      <Field label="Due date (optional)">
+        <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      </Field>
+      <Field label="Note (optional)">
+        <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
+      </Field>
+      <button
+        disabled={!personName || !totalAmount}
+        onClick={() => onSave({ personName, direction, totalAmount: Number(totalAmount), dueDate, note, memberId: memberId || null })}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        Save debt
+      </button>
+    </Modal>
+  );
+}
+
+function PayDebtModal({ debt, data, incomeMembers, paidSoFar, onClose, onSave }) {
+  const remaining = debt.totalAmount - paidSoFar;
+  const [amount, setAmount] = useState(remaining);
+  const [memberId, setMemberId] = useState(incomeMembers[0]?.id || "");
+  const [splitMode, setSplitMode] = useState("single");
+
+  const buildPaidFrom = () => {
+    if (debt.direction !== "i_owe") return [];
+    if (splitMode === "equal") {
+      const each = Math.round((amount / incomeMembers.length) * 100) / 100;
+      return incomeMembers.map((m) => ({ memberId: m.id, amount: each }));
+    }
+    return [{ memberId, amount: Number(amount) }];
+  };
+
+  return (
+    <Modal title={`Record payment · ${debt.personName}`} onClose={onClose}>
+      <Field label="Amount">
+        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </Field>
+      {debt.direction === "i_owe" ? (
+        <Field label="Paid from">
+          <div className="flex gap-2 mb-2">
+            <Pill active={splitMode === "single"} onClick={() => setSplitMode("single")}>One member</Pill>
+            <Pill active={splitMode === "equal"} onClick={() => setSplitMode("equal")}>Split equally</Pill>
+          </div>
+          {splitMode === "single" && (
+            <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+              {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          )}
+        </Field>
+      ) : (
+        <Field label="Received by">
+          <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+            {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Field>
+      )}
+      <button
+        disabled={!amount}
+        onClick={() =>
+          onSave({
+            type: debt.direction === "i_owe" ? "expense" : "income",
+            amount: Number(amount),
+            categoryId: "debt",
+            memberId: debt.direction === "i_owe" ? null : memberId,
+            date: todayISO(),
+            note: `Payment · ${debt.personName}`,
+            paidFrom: buildPaidFrom(),
+            debtId: debt.id,
+          })
+        }
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        Save payment
+      </button>
+    </Modal>
+  );
+}
+
+/* ---------------------------------- Recurring ---------------------------------- */
+
+function RecurringTab({ data, onAdd, onToggle, onDelete, onApply, pendingIds }) {
+  return (
+    <div className="space-y-4">
+      <button onClick={onAdd} className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5">
+        <Plus size={15} /> New recurring entry
+      </button>
+      <div className="space-y-2.5">
+        {data.recurring.map((r) => {
+          const cat = data.categories.find((c) => c.id === r.categoryId);
+          const mem = data.members.find((m) => m.id === r.memberId);
+          const isPending = pendingIds.includes(r.id);
+          return (
+            <Card key={r.id} className="p-3.5 flex items-center gap-3">
+              {cat ? <IconBadge iconName={cat.icon} color={cat.color} size="sm" /> : <Avatar member={mem} size="sm" />}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium flex items-center gap-1.5">
+                  {r.note}
+                  {!r.active && <span className="text-[10px] bg-stone-200 text-stone-500 px-1.5 py-0.5 rounded-full">paused</span>}
+                </div>
+                <div className="text-[11px] text-stone-400">
+                  {r.type === "income" ? "Income" : "Expense"} · {fmt(r.amount)} · day {r.dayOfMonth} of month
+                </div>
+              </div>
+              {isPending && r.active && (
+                <button onClick={() => onApply(r)} className="text-xs font-semibold bg-emerald-600 text-white px-2.5 py-1.5 rounded-full">Add</button>
+              )}
+              <button onClick={() => onToggle(r.id)} className="text-xs font-semibold text-stone-500 px-2 py-1.5">
+                {r.active ? "Pause" : "Resume"}
+              </button>
+              <button onClick={() => onDelete(r.id)} className="text-stone-300 hover:text-rose-600 p-1"><Trash2 size={14} /></button>
+            </Card>
+          );
+        })}
+        {data.recurring.length === 0 && <p className="text-center text-sm text-stone-400 py-8">Koi recurring entry nahi hai.</p>}
+      </div>
+    </div>
+  );
+}
+
+function AddRecurringModal({ data, incomeMembers, onClose, onSave }) {
+  const [type, setType] = useState("expense");
+  const [amount, setAmount] = useState("");
+  const [categoryId, setCategoryId] = useState(data.categories[0]?.id || "");
+  const [memberId, setMemberId] = useState(incomeMembers[0]?.id || "");
+  const [note, setNote] = useState("");
+  const [dayOfMonth, setDayOfMonth] = useState(1);
+
+  return (
+    <Modal title="New recurring entry" onClose={onClose}>
+      <Field label="Type">
+        <div className="flex gap-2">
+          <Pill active={type === "expense"} onClick={() => setType("expense")}>Expense</Pill>
+          <Pill active={type === "income"} onClick={() => setType("income")}>Income</Pill>
+        </div>
+      </Field>
+      <Field label="Amount">
+        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </Field>
+      {type === "expense" ? (
+        <Field label="Category">
+          <select className={inputCls} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            {data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+      ) : (
+        <Field label="Income source">
+          <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+            {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Field>
+      )}
+      <Field label="Day of month">
+        <input type="number" min={1} max={28} className={inputCls} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} />
+      </Field>
+      <Field label="Note">
+        <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. House rent" />
+      </Field>
+      <button
+        disabled={!amount || !note}
+        onClick={() =>
+          onSave({
+            type, amount: Number(amount), categoryId: type === "expense" ? categoryId : null,
+            memberId: type === "expense" ? null : memberId, paidFromMode: type === "expense" ? "equal" : null,
+            note, dayOfMonth, active: true,
+          })
+        }
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        Save recurring entry
+      </button>
+    </Modal>
+  );
+}
+
+/* ---------------------------------- Settings ---------------------------------- */
+
+function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMembers, onResetDemo, onClearAll, user, isOwner, requests, onApprove, onDeny, onSignOut, allowlist, onTransferOwner }) {
+  const [confirmTransfer, setConfirmTransfer] = useState(null);
+  const otherApproved = isOwner
+    ? (allowlist?.approvedUids || []).filter((uid) => uid !== user.uid)
+    : [];
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <h3 className="font-serif text-base text-indigo-950 mb-3 flex items-center gap-1.5"><ShieldCheck size={16} /> Family access</h3>
+        <p className="text-xs text-stone-500 mb-3">
+          Signed in as <span className="font-medium">{user?.email}</span>{isOwner ? " · owner" : ""}
+        </p>
+        {isOwner && (
+          <div className="mb-3">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Pending approval</p>
+            {requests.length === 0 ? (
+              <p className="text-xs text-stone-400">No one is waiting for approval right now.</p>
+            ) : (
+              <div className="space-y-2">
+                {requests.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+                    <span className="text-xs font-medium truncate">{r.email}</span>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button onClick={() => onApprove(r.id, r.email)} className="text-[11px] font-semibold bg-emerald-600 text-white px-2.5 py-1 rounded-full flex items-center gap-1">
+                        <UserCheck size={12} /> Approve
+                      </button>
+                      <button onClick={() => onDeny(r.id)} className="text-[11px] font-semibold bg-stone-200 text-stone-600 px-2.5 py-1 rounded-full">
+                        Deny
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {isOwner && (
+          <div className="mb-3">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Transfer ownership</p>
+            {otherApproved.length === 0 ? (
+              <p className="text-xs text-stone-400">No other approved members yet — approve someone first, then you can hand over ownership to them.</p>
+            ) : (
+              <div className="space-y-2">
+                {otherApproved.map((uid) => {
+                  const email = allowlist?.emails?.[uid] || uid;
+                  return (
+                    <div key={uid} className="flex items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+                      <span className="text-xs font-medium truncate">{email}</span>
+                      {confirmTransfer === uid ? (
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            onClick={() => { onTransferOwner(uid); setConfirmTransfer(null); }}
+                            className="text-[11px] font-semibold bg-rose-600 text-white px-2.5 py-1 rounded-full"
+                          >
+                            Confirm
+                          </button>
+                          <button onClick={() => setConfirmTransfer(null)} className="text-[11px] font-semibold bg-stone-200 text-stone-600 px-2.5 py-1 rounded-full">
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmTransfer(uid)} className="text-[11px] font-semibold bg-stone-200 text-stone-700 px-2.5 py-1 rounded-full shrink-0">
+                          Make owner
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        <button onClick={onSignOut} className="flex items-center gap-1.5 text-xs font-semibold bg-stone-100 px-3 py-2 rounded-full">
+          <LogOut size={13} /> Sign out
+        </button>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="font-serif text-base text-indigo-950 mb-3">Family members</h3>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {data.members.map((m) => (
+            <div key={m.id} className="flex items-center gap-1.5 bg-stone-100 rounded-full pl-1 pr-3 py-1">
+              <Avatar member={m} size="sm" />
+              <span className="text-xs font-medium">{m.name}</span>
+              {m.isIncomeSource && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">income</span>}
+            </div>
+          ))}
+        </div>
+        <button onClick={onManageMembers} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full">Manage members</button>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="font-serif text-base text-indigo-950 mb-3">Export & backup</h3>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={onExportCSV} className="flex items-center gap-1.5 text-xs font-semibold bg-stone-100 px-3 py-2 rounded-full"><Download size={13} /> CSV</button>
+          <button onClick={onExportJSON} className="flex items-center gap-1.5 text-xs font-semibold bg-stone-100 px-3 py-2 rounded-full"><Download size={13} /> JSON backup</button>
+          <label className="flex items-center gap-1.5 text-xs font-semibold bg-stone-100 px-3 py-2 rounded-full cursor-pointer">
+            <Upload size={13} /> Import backup
+            <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files[0] && onImportJSON(e.target.files[0])} />
+          </label>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="font-serif text-base text-indigo-950 mb-1">Data sharing</h3>
+        <p className="text-xs text-stone-500 leading-relaxed">
+          This ledger is synced live via Firebase — every approved family member sees the same numbers update in real time, from any device.
+        </p>
+      </Card>
+
+      <Card className="p-4 border-rose-200">
+        <h3 className="font-serif text-base text-rose-700 mb-3">Reset</h3>
+        <div className="flex gap-2">
+          <button onClick={onResetDemo} className="text-xs font-semibold bg-stone-100 px-3 py-2 rounded-full">Reset to demo data</button>
+          <button onClick={onClearAll} className="text-xs font-semibold bg-rose-100 text-rose-700 px-3 py-2 rounded-full">Clear all data</button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------------------------- Members Modal ---------------------------------- */
+
+function MembersModal({ data, onClose, onAdd, onUpdate, onDelete }) {
+  const [name, setName] = useState("");
+  const [isIncomeSource, setIsIncomeSource] = useState(false);
+  const [avatar, setAvatar] = useState(AVATAR_CHOICES[0]);
+  const [color, setColor] = useState(COLOR_CHOICES[0]);
+
+  return (
+    <Modal title="Family members" onClose={onClose}>
+      <div className="space-y-2 mb-5">
+        {data.members.map((m) => (
+          <div key={m.id} className="flex items-center gap-3 bg-white border border-stone-200 rounded-xl p-2.5">
+            <Avatar member={m} />
+            <div className="flex-1 min-w-0">
+              <input
+                className="text-sm font-medium bg-transparent border-none focus:outline-none w-full"
+                defaultValue={m.name}
+                onBlur={(e) => onUpdate(m.id, { name: e.target.value })}
+              />
+              <label className="flex items-center gap-1.5 text-[11px] text-stone-400 mt-0.5">
+                <input type="checkbox" checked={m.isIncomeSource} onChange={(e) => onUpdate(m.id, { isIncomeSource: e.target.checked })} />
+                Income source (paisa kamata hai)
+              </label>
+            </div>
+            <button onClick={() => onDelete(m.id)} className="text-stone-300 hover:text-rose-600 p-1"><Trash2 size={14} /></button>
+          </div>
+        ))}
+      </div>
+
+      <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Add new member</h4>
+      <Field label="Name">
+        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dadi" />
+      </Field>
+      <Field label="Avatar">
+        <div className="flex flex-wrap gap-2">
+          {AVATAR_CHOICES.map((a) => (
+            <button key={a} onClick={() => setAvatar(a)} className={`w-9 h-9 rounded-full flex items-center justify-center text-lg bg-stone-100 ${avatar === a ? "ring-2 ring-amber-500" : ""}`}>{a}</button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Color tag">
+        <div className="flex flex-wrap gap-2">
+          {COLOR_CHOICES.map((c) => (
+            <button key={c} onClick={() => setColor(c)} className="w-7 h-7 rounded-full border-2" style={{ backgroundColor: c, borderColor: c === color ? "#1e293b" : "transparent" }} />
+          ))}
+        </div>
+      </Field>
+      <label className="flex items-center gap-2 text-sm mb-4">
+        <input type="checkbox" checked={isIncomeSource} onChange={(e) => setIsIncomeSource(e.target.checked)} />
+        This member earns income (salary source)
+      </label>
+      <button
+        disabled={!name}
+        onClick={() => { onAdd({ name, isIncomeSource, avatar, color, sharedWith: [] }); setName(""); }}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        Add member
+      </button>
+    </Modal>
+  );
+}
+
+/* ---------------------------------- Add Transaction Modal ---------------------------------- */
+
+function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, onSave, onUpdate, onAddCategory }) {
+  const editing = editingTx || null;
+  // Work out the split mode/values from an existing transaction's paidFrom.
+  const derivedSplit = (() => {
+    const pf = editing?.paidFrom || [];
+    const emptyCustom = Object.fromEntries(incomeMembers.map((m) => [m.id, ""]));
+    if (pf.length === 0) return { mode: "equal", single: incomeMembers[0]?.id || "", custom: emptyCustom };
+    if (pf.length === 1) return { mode: "single", single: pf[0].memberId, custom: emptyCustom };
+    const allEqual = pf.every((p) => Math.abs(p.amount - pf[0].amount) < 0.01);
+    if (allEqual && pf.length === incomeMembers.length) return { mode: "equal", single: incomeMembers[0]?.id || "", custom: emptyCustom };
+    return {
+      mode: "custom",
+      single: incomeMembers[0]?.id || "",
+      custom: Object.fromEntries(incomeMembers.map((m) => [m.id, String(pf.find((x) => x.memberId === m.id)?.amount ?? "")])),
+    };
+  })();
+
+  const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
+  const [categoryId, setCategoryId] = useState(editing?.categoryId || data.categories.find((c) => !c.isSystem)?.id || "");
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [categories, setCategories] = useState(data.categories);
+
+  const handleAddCategory = (c) => {
+    const newCat = onAddCategory(c);
+    setCategories((prev) => [...prev, newCat]);
+    setCategoryId(newCat.id);
+    setShowNewCategory(false);
+  };
+  const [spentBy, setSpentBy] = useState((editing && type === "expense" ? editing.memberId : null) || data.members[0]?.id || "");
+  const [incomeSource, setIncomeSource] = useState((editing && type === "income" ? editing.memberId : null) || incomeMembers[0]?.id || "");
+  const [placeId, setPlaceId] = useState(editing?.placeId || "");
+  const [date, setDate] = useState(editing?.date || todayISO());
+  const [note, setNote] = useState(editing?.note || "");
+  const [splitMode, setSplitMode] = useState(derivedSplit.mode);
+  const [singlePayer, setSinglePayer] = useState(derivedSplit.single);
+  const [customSplit, setCustomSplit] = useState(derivedSplit.custom);
+
+  // Family IOU: person A paid now, person B repays A later (add mode only).
+  const [isLoan, setIsLoan] = useState(false);
+  const [lenderId, setLenderId] = useState(data.members[0]?.id || "");
+  const [borrowerId, setBorrowerId] = useState(data.members[1]?.id || data.members[0]?.id || "");
+  const [owedAmount, setOwedAmount] = useState("");
+
+  const amt = Number(amount) || 0;
+
+  const buildPaidFrom = () => {
+    if (splitMode === "equal") {
+      const each = Math.round((amt / incomeMembers.length) * 100) / 100;
+      return incomeMembers.map((m) => ({ memberId: m.id, amount: each }));
+    }
+    if (splitMode === "single") return [{ memberId: singlePayer, amount: amt }];
+    return incomeMembers.filter((m) => Number(customSplit[m.id]) > 0).map((m) => ({ memberId: m.id, amount: Number(customSplit[m.id]) }));
+  };
+
+  const customSum = Object.values(customSplit).reduce((s, v) => s + (Number(v) || 0), 0);
+
+  return (
+    <Modal title={editing ? (type === "income" ? "Edit income" : "Edit expense") : (type === "income" ? "Add income" : "Add expense")} onClose={onClose}>
+      <Field label="Amount">
+        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+      </Field>
+
+      {type === "expense" && (
+        <Field label="Category">
+          <div className="flex items-center gap-2">
+            <select className={inputCls} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              {categories.filter((c) => !c.isSystem).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowNewCategory((v) => !v)}
+              className="shrink-0 text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-2.5 rounded-lg flex items-center gap-1"
+            >
+              <Plus size={13} /> New
+            </button>
+          </div>
+          {showNewCategory && (
+            <div className="mt-2 p-3 rounded-xl bg-stone-50 border border-stone-200">
+              <NewCategoryForm onSave={handleAddCategory} compact />
+            </div>
+          )}
+        </Field>
+      )}
+
+      {type === "expense" ? (
+        <Field label="Spent by">
+          <select className={inputCls} value={spentBy} onChange={(e) => setSpentBy(e.target.value)}>
+            {data.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Field>
+      ) : (
+        <Field label="Income source">
+          <select className={inputCls} value={incomeSource} onChange={(e) => setIncomeSource(e.target.value)}>
+            {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Field>
+      )}
+
+      {type === "expense" && (
+        <Field label="Paid from whose money">
+          <div className="flex gap-2 mb-2 flex-wrap">
+            <Pill active={splitMode === "equal"} onClick={() => setSplitMode("equal")}>Split equally</Pill>
+            <Pill active={splitMode === "single"} onClick={() => setSplitMode("single")}>One person</Pill>
+            <Pill active={splitMode === "custom"} onClick={() => setSplitMode("custom")}>Custom split</Pill>
+          </div>
+          {splitMode === "single" && (
+            <select className={inputCls} value={singlePayer} onChange={(e) => setSinglePayer(e.target.value)}>
+              {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          )}
+          {splitMode === "custom" && (
+            <div className="space-y-2">
+              {incomeMembers.map((m) => (
+                <div key={m.id} className="flex items-center gap-2">
+                  <span className="text-xs w-20 truncate">{m.name}</span>
+                  <input
+                    type="number"
+                    className={inputCls}
+                    value={customSplit[m.id]}
+                    onChange={(e) => setCustomSplit({ ...customSplit, [m.id]: e.target.value })}
+                  />
+                </div>
+              ))}
+              <div className={`text-[11px] ${customSum !== amt ? "text-rose-600" : "text-emerald-600"}`}>
+                {fmt(customSum)} of {fmt(amt)} allocated
+              </div>
+            </div>
+          )}
+          {splitMode === "equal" && incomeMembers.length > 0 && (
+            <p className="text-[11px] text-stone-400">
+              {fmt(amt / incomeMembers.length || 0)} each from {incomeMembers.map((m) => m.name).join(", ")}
+            </p>
+          )}
+        </Field>
+      )}
+
+      {type === "expense" && !editing && data.members.length >= 2 && (
+        <Field label="Will someone repay you? (family IOU)">
+          <div className="flex gap-2 mb-2">
+            <Pill active={!isLoan} onClick={() => setIsLoan(false)}>No</Pill>
+            <Pill active={isLoan} onClick={() => setIsLoan(true)}>Yes, someone owes it back</Pill>
+          </div>
+          {isLoan && (
+            <div className="space-y-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200">
+              <div>
+                <label className="block text-[11px] font-medium text-stone-500 mb-1">Paid now by (will be repaid)</label>
+                <select className={inputCls} value={lenderId} onChange={(e) => setLenderId(e.target.value)}>
+                  {data.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-stone-500 mb-1">Will repay (owes the money)</label>
+                <select className={inputCls} value={borrowerId} onChange={(e) => setBorrowerId(e.target.value)}>
+                  {data.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-stone-500 mb-1">Amount owed</label>
+                <input type="number" className={inputCls} value={owedAmount} onChange={(e) => setOwedAmount(e.target.value)} placeholder={`Full amount (${fmt(amt)})`} />
+              </div>
+              {lenderId === borrowerId ? (
+                <p className="text-[11px] text-rose-600">Payer and the person who owes must be different.</p>
+              ) : (
+                <p className="text-[11px] text-stone-400">
+                  {(data.members.find((m) => m.id === borrowerId)?.name) || "?"} will owe {(data.members.find((m) => m.id === lenderId)?.name) || "?"} {fmt(Number(owedAmount) || amt)}. This shows up in the Debts tab.
+                </p>
+              )}
+            </div>
+          )}
+        </Field>
+      )}
+
+      {(data.places || []).length > 0 && (
+        <Field label={type === "income" ? "Add to which place?" : "Spend from which place?"}>
+          <select className={inputCls} value={placeId} onChange={(e) => setPlaceId(e.target.value)}>
+            <option value="">Don't track against a place</option>
+            {data.places.map((p) => {
+              const owner = data.members.find((m) => m.id === p.ownerId);
+              return <option key={p.id} value={p.id}>{p.name}{owner ? ` · ${owner.name}` : " · Shared"} ({fmt(p.balance)})</option>;
+            })}
+          </select>
+        </Field>
+      )}
+
+      <Field label="Date">
+        <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
+      </Field>
+      <Field label="Note">
+        <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+      </Field>
+
+      <button
+        disabled={!amt || (type === "expense" && splitMode === "custom" && customSum !== amt) || (type === "expense" && incomeMembers.length === 0) || (type === "expense" && !editing && isLoan && lenderId === borrowerId)}
+        onClick={() => {
+          const payload = {
+            type, amount: amt, categoryId: type === "expense" ? categoryId : null,
+            memberId: type === "expense" ? spentBy : incomeSource,
+            date, note, paidFrom: type === "expense" ? buildPaidFrom() : [],
+            placeId: placeId || null,
+          };
+          if (editing) {
+            onUpdate(editing.id, payload); // debtId/recurringId preserved from the original
+          } else {
+            const loan =
+              type === "expense" && isLoan && lenderId && borrowerId && lenderId !== borrowerId
+                ? {
+                    lenderId,
+                    borrowerId,
+                    amount: Number(owedAmount) || amt,
+                    label: data.categories.find((c) => c.id === categoryId)?.name || "",
+                  }
+                : null;
+            onSave({ ...payload, debtId: null, recurringId: null }, loan);
+          }
+        }}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40 mt-1"
+      >
+        {editing ? "Save changes" : `Save ${type === "income" ? "income" : "expense"}`}
+      </button>
+      {type === "expense" && incomeMembers.length === 0 && (
+        <p className="text-xs text-rose-600 mt-2">Pehle kam se kam ek income-source member add karein (top-right avatars → Manage members).</p>
+      )}
+    </Modal>
+  );
+}
+
+import ReactDOM from "react-dom/client";
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
