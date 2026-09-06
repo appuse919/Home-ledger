@@ -1,4 +1,4 @@
-const CACHE_NAME = "home-ledger-v1";
+const CACHE_NAME = "home-ledger-v2";
 const APP_SHELL = ["./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -15,27 +15,25 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Network-first: always try to get the latest version from the internet first.
+// Only fall back to the saved offline copy if there's no internet connection.
+// This is the opposite of "cache-first", which was serving old/stale app updates.
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Only handle same-origin GET requests for the app shell.
-  // Everything else (Firebase Auth/Firestore, CDN scripts, etc.) goes straight to the network.
   if (event.request.method !== "GET" || url.origin !== self.location.origin) {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const networkFetch = fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
-    })
+    fetch(event.request, { cache: "no-store" })
+      .then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
