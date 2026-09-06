@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Home Ledger</title>
+<title>Bhilare's-Blessed and Abundant</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script type="importmap">
 {
@@ -26,7 +26,7 @@
 <meta name="theme-color" content="#1e1b4b" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-title" content="Home Ledger" />
+<meta name="apple-mobile-web-app-title" content="Bhilare's-Blessed and Abundant" />
 <style>
   html, body { margin:0; padding:0; background:#f5f5f4; }
 </style>
@@ -283,7 +283,7 @@ const inputCls = "w-full px-3 py-2.5 rounded-lg border border-stone-300 bg-white
 /* ---------------------------------- language / translations ---------------------------------- */
 
 const TRANSLATIONS = {
-  appName: { en: "Home Ledger", mr: "घर हिशोब" },
+  appName: { en: "Bhilare's-Blessed and Abundant", mr: "घर हिशोब" },
   tagline: { en: "Shared family ledger", mr: "कुटुंबाचा हिशोब" },
   loading: { en: "Loading your ledger...", mr: "हिशोब लोड होत आहे..." },
   saveFailed: { en: "Couldn't save — check your connection.", mr: "सेव्ह होऊ शकले नाही — कनेक्शन तपासा." },
@@ -371,7 +371,7 @@ function AuthScreen() {
           <div className="w-14 h-14 rounded-full bg-indigo-950 flex items-center justify-center text-amber-400">
             <Stamp size={26} />
           </div>
-          <h1 className="font-serif text-2xl text-indigo-950">Home Ledger</h1>
+          <h1 className="font-serif text-xl text-center leading-tight text-indigo-950">Bhilare's-Blessed and Abundant</h1>
           <p className="text-xs text-stone-500">Shared family ledger</p>
         </div>
         <Card className="p-5">
@@ -714,7 +714,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
   const applyRecurring = (r) => {
     const paidFrom =
       r.type === "expense"
-        ? splitEqually(r.amount, incomeMembers.map((m) => m.id))
+        ? splitEqually(r.amount, data.members.map((m) => m.id))
         : [];
     const date = `${thisMonthKey()}-${String(r.dayOfMonth || 1).padStart(2, "0")}`;
     addTransaction({
@@ -797,6 +797,38 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
       (r) => r.active && !data.transactions.some((t) => t.recurringId === r.id && monthKeyOf(t.date) === thisMonthKey())
     );
   }, [data]);
+
+  /* ---------- reminder notifications ---------- */
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
+  );
+
+  async function enableReminders() {
+    if (typeof Notification === "undefined") return;
+    const perm = await Notification.requestPermission();
+    setNotifPermission(perm);
+  }
+
+  useEffect(() => {
+    if (notifPermission !== "granted" || pendingRecurring.length === 0) return;
+    const flagKey = "home-ledger-notified-" + thisMonthKey();
+    if (localStorage.getItem(flagKey)) return; // already notified this month
+    const title = pendingRecurring.length === 1 ? "1 recurring entry pending" : `${pendingRecurring.length} recurring entries pending`;
+    const body = pendingRecurring.map((r) => r.note || r.type).slice(0, 3).join(", ") + (pendingRecurring.length > 3 ? "…" : "");
+    const show = () => {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, { body, icon: "icon-192.png", badge: "icon-192.png" }).catch(() => {
+            try { new Notification(title, { body, icon: "icon-192.png" }); } catch (e) {}
+          });
+        });
+      } else {
+        try { new Notification(title, { body, icon: "icon-192.png" }); } catch (e) {}
+      }
+    };
+    show();
+    localStorage.setItem(flagKey, "1");
+  }, [notifPermission, pendingRecurring]);
 
   const monthlyTrend = useMemo(() => {
     if (!data) return [];
@@ -941,7 +973,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
               <Stamp size={20} />
             </div>
             <div>
-              <h1 className="font-serif text-xl leading-tight">{t("appName")}</h1>
+              <h1 className="font-serif text-base sm:text-xl leading-tight">{t("appName")}</h1>
               <p className="text-xs text-indigo-300 tracking-wide">{t("tagline")}</p>
             </div>
           </div>
@@ -1132,6 +1164,8 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
             onSignOut={onSignOut}
             allowlist={allowlist}
             onTransferOwner={onTransferOwner}
+            notifPermission={notifPermission}
+            onEnableReminders={enableReminders}
           />
         )}
       </div>
@@ -1551,6 +1585,7 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
 }
 
 function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
+  const cardColor = member.color || "#1e3a5f";
   const paidOnDebt = (id) => data.transactions.filter((t) => t.debtId === id).reduce((s, t) => s + t.amount, 0);
   const monthTx = data.transactions.filter((t) => monthKeyOf(t.date) === thisMonthKey());
   const incomeThisMonth = monthTx
@@ -1593,7 +1628,7 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
   return (
     <div className="space-y-5">
       {/* personal net worth */}
-      <Card className="p-5" style={{ background: `linear-gradient(135deg, ${member.color}, ${member.color}cc)` }}>
+      <Card className="p-5" style={{ background: `linear-gradient(135deg, ${cardColor}, ${cardColor}cc)` }}>
         <div className="flex items-center gap-3 mb-3">
           <Avatar member={member} size="lg" />
           <div>
@@ -2316,16 +2351,17 @@ function AddDebtModal({ onClose, onSave, members = [] }) {
 }
 
 function PayDebtModal({ debt, data, incomeMembers, paidSoFar, onClose, onSave }) {
+  const payerMembers = data.members;
   const remaining = debt.totalAmount - paidSoFar;
   const [amount, setAmount] = useState(remaining);
-  const [memberId, setMemberId] = useState(incomeMembers[0]?.id || "");
+  const [memberId, setMemberId] = useState(payerMembers[0]?.id || "");
   const [splitMode, setSplitMode] = useState("single");
 
   const buildPaidFrom = () => {
     if (debt.direction !== "i_owe") return [];
     if (splitMode === "equal") {
-      const each = Math.round((amount / incomeMembers.length) * 100) / 100;
-      return incomeMembers.map((m) => ({ memberId: m.id, amount: each }));
+      const each = Math.round((amount / payerMembers.length) * 100) / 100;
+      return payerMembers.map((m) => ({ memberId: m.id, amount: each }));
     }
     return [{ memberId, amount: Number(amount) }];
   };
@@ -2343,14 +2379,14 @@ function PayDebtModal({ debt, data, incomeMembers, paidSoFar, onClose, onSave })
           </div>
           {splitMode === "single" && (
             <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-              {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              {payerMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           )}
         </Field>
       ) : (
         <Field label="Received by">
           <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-            {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            {payerMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </Field>
       )}
@@ -2474,7 +2510,7 @@ function AddRecurringModal({ data, incomeMembers, onClose, onSave }) {
 
 /* ---------------------------------- Settings ---------------------------------- */
 
-function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMembers, onResetDemo, onClearAll, user, isOwner, requests, onApprove, onDeny, onSignOut, allowlist, onTransferOwner }) {
+function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMembers, onResetDemo, onClearAll, user, isOwner, requests, onApprove, onDeny, onSignOut, allowlist, onTransferOwner, notifPermission, onEnableReminders }) {
   const [confirmTransfer, setConfirmTransfer] = useState(null);
   const otherApproved = isOwner
     ? (allowlist?.approvedUids || []).filter((uid) => uid !== user.uid)
@@ -2552,6 +2588,22 @@ function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMe
       </Card>
 
       <Card className="p-4">
+        <h3 className="font-serif text-base text-indigo-950 mb-3 flex items-center gap-1.5"><Repeat size={16} /> Reminders</h3>
+        {notifPermission === "unsupported" ? (
+          <p className="text-xs text-stone-400">Notifications aren't supported in this browser.</p>
+        ) : notifPermission === "granted" ? (
+          <p className="text-xs text-emerald-700 flex items-center gap-1.5"><Check size={14} /> Reminders are on — you'll get a notification when a recurring entry is pending, whenever you open the app that month.</p>
+        ) : notifPermission === "denied" ? (
+          <p className="text-xs text-rose-600">Notifications are blocked for this app in your browser settings. You'll need to allow them from your browser/phone's site settings to enable reminders.</p>
+        ) : (
+          <div>
+            <p className="text-xs text-stone-500 mb-2">Get notified when a recurring entry (like rent or salary) is waiting to be logged.</p>
+            <button onClick={onEnableReminders} className="text-xs font-semibold bg-amber-400 text-indigo-950 px-3 py-1.5 rounded-full">Enable reminders</button>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-4">
         <h3 className="font-serif text-base text-indigo-950 mb-3">Family members</h3>
         <div className="flex flex-wrap gap-2 mb-3">
           {data.members.map((m) => (
@@ -2619,6 +2671,16 @@ function MembersModal({ data, onClose, onAdd, onUpdate, onDelete }) {
                 <input type="checkbox" checked={m.isIncomeSource} onChange={(e) => onUpdate(m.id, { isIncomeSource: e.target.checked })} />
                 Income source (paisa kamata hai)
               </label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {COLOR_CHOICES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => onUpdate(m.id, { color: c })}
+                    className="w-5 h-5 rounded-full border-2"
+                    style={{ backgroundColor: c, borderColor: c === m.color ? "#1e293b" : "transparent" }}
+                  />
+                ))}
+              </div>
             </div>
             <button onClick={() => onDelete(m.id)} className="text-stone-300 hover:text-rose-600 p-1"><Trash2 size={14} /></button>
           </div>
@@ -2662,18 +2724,21 @@ function MembersModal({ data, onClose, onAdd, onUpdate, onDelete }) {
 
 function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, onSave, onUpdate, onAddCategory }) {
   const editing = editingTx || null;
+  // Anyone can be the actual payer (even without regular income, e.g. paying from savings) —
+  // so "Paid from whose money" draws from every family member, not just income sources.
+  const payerMembers = data.members;
   // Work out the split mode/values from an existing transaction's paidFrom.
   const derivedSplit = (() => {
     const pf = editing?.paidFrom || [];
-    const emptyCustom = Object.fromEntries(incomeMembers.map((m) => [m.id, ""]));
-    if (pf.length === 0) return { mode: "equal", single: incomeMembers[0]?.id || "", custom: emptyCustom };
+    const emptyCustom = Object.fromEntries(payerMembers.map((m) => [m.id, ""]));
+    if (pf.length === 0) return { mode: "equal", single: payerMembers[0]?.id || "", custom: emptyCustom };
     if (pf.length === 1) return { mode: "single", single: pf[0].memberId, custom: emptyCustom };
     const allEqual = pf.every((p) => Math.abs(p.amount - pf[0].amount) < 0.01);
-    if (allEqual && pf.length === incomeMembers.length) return { mode: "equal", single: incomeMembers[0]?.id || "", custom: emptyCustom };
+    if (allEqual && pf.length === payerMembers.length) return { mode: "equal", single: payerMembers[0]?.id || "", custom: emptyCustom };
     return {
       mode: "custom",
-      single: incomeMembers[0]?.id || "",
-      custom: Object.fromEntries(incomeMembers.map((m) => [m.id, String(pf.find((x) => x.memberId === m.id)?.amount ?? "")])),
+      single: payerMembers[0]?.id || "",
+      custom: Object.fromEntries(payerMembers.map((m) => [m.id, String(pf.find((x) => x.memberId === m.id)?.amount ?? "")])),
     };
   })();
 
@@ -2694,8 +2759,20 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
   const [date, setDate] = useState(editing?.date || todayISO());
   const [note, setNote] = useState(editing?.note || "");
   const [splitMode, setSplitMode] = useState(derivedSplit.mode);
-  const [singlePayer, setSinglePayer] = useState(derivedSplit.single);
+  const [singlePayer, setSinglePayer] = useState(
+    (!editing && payerMembers.some((m) => m.id === spentBy)) ? spentBy : derivedSplit.single
+  );
   const [customSplit, setCustomSplit] = useState(derivedSplit.custom);
+
+  // Keep "Paid from whose money" in sync with "Spent by" by default —
+  // most of the time the same person spends and pays, so avoid asking twice.
+  useEffect(() => {
+    if (editing) return; // don't override an existing transaction's saved split
+    if (splitMode !== "single") return;
+    if (payerMembers.some((m) => m.id === spentBy)) {
+      setSinglePayer(spentBy);
+    }
+  }, [spentBy, splitMode]);
 
   // Family IOU: person A paid now, person B repays A later (add mode only).
   const [isLoan, setIsLoan] = useState(false);
@@ -2707,11 +2784,11 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
 
   const buildPaidFrom = () => {
     if (splitMode === "equal") {
-      const each = Math.round((amt / incomeMembers.length) * 100) / 100;
-      return incomeMembers.map((m) => ({ memberId: m.id, amount: each }));
+      const each = Math.round((amt / payerMembers.length) * 100) / 100;
+      return payerMembers.map((m) => ({ memberId: m.id, amount: each }));
     }
     if (splitMode === "single") return [{ memberId: singlePayer, amount: amt }];
-    return incomeMembers.filter((m) => Number(customSplit[m.id]) > 0).map((m) => ({ memberId: m.id, amount: Number(customSplit[m.id]) }));
+    return payerMembers.filter((m) => Number(customSplit[m.id]) > 0).map((m) => ({ memberId: m.id, amount: Number(customSplit[m.id]) }));
   };
 
   const customSum = Object.values(customSplit).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -2767,12 +2844,12 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
           </div>
           {splitMode === "single" && (
             <select className={inputCls} value={singlePayer} onChange={(e) => setSinglePayer(e.target.value)}>
-              {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              {payerMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           )}
           {splitMode === "custom" && (
             <div className="space-y-2">
-              {incomeMembers.map((m) => (
+              {payerMembers.map((m) => (
                 <div key={m.id} className="flex items-center gap-2">
                   <span className="text-xs w-20 truncate">{m.name}</span>
                   <input
@@ -2788,9 +2865,9 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
               </div>
             </div>
           )}
-          {splitMode === "equal" && incomeMembers.length > 0 && (
+          {splitMode === "equal" && payerMembers.length > 0 && (
             <p className="text-[11px] text-stone-400">
-              {fmt(amt / incomeMembers.length || 0)} each from {incomeMembers.map((m) => m.name).join(", ")}
+              {fmt(amt / payerMembers.length || 0)} each from {payerMembers.map((m) => m.name).join(", ")}
             </p>
           )}
         </Field>
@@ -2852,7 +2929,7 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
       </Field>
 
       <button
-        disabled={!amt || (type === "expense" && splitMode === "custom" && customSum !== amt) || (type === "expense" && incomeMembers.length === 0) || (type === "expense" && !editing && isLoan && lenderId === borrowerId)}
+        disabled={!amt || (type === "expense" && splitMode === "custom" && customSum !== amt) || (type === "expense" && payerMembers.length === 0) || (type === "expense" && !editing && isLoan && lenderId === borrowerId)}
         onClick={() => {
           const payload = {
             type, amount: amt, categoryId: type === "expense" ? categoryId : null,
@@ -2879,8 +2956,8 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
       >
         {editing ? "Save changes" : `Save ${type === "income" ? "income" : "expense"}`}
       </button>
-      {type === "expense" && incomeMembers.length === 0 && (
-        <p className="text-xs text-rose-600 mt-2">Pehle kam se kam ek income-source member add karein (top-right avatars → Manage members).</p>
+      {type === "expense" && payerMembers.length === 0 && (
+        <p className="text-xs text-rose-600 mt-2">Pehle kam se kam ek family member add karein (top-right avatars → Manage members).</p>
       )}
     </Modal>
   );
