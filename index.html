@@ -5,6 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Bhilare's-Blessed and Abundant</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // A palette built for this app specifically — a ledger-navy ink (replacing
+  // generic Tailwind indigo), a brass/gold stamp accent (replacing generic amber),
+  // and a warm "paper" neutral (replacing plain grey stone) — instead of Tailwind's
+  // stock defaults. Every existing indigo-*/amber-*/stone-* class in the app
+  // picks this up automatically; no need to touch component code.
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          indigo: {
+            50: "#eef3f7", 100: "#d9e4ed", 200: "#b3c9db", 300: "#88a8c2",
+            400: "#5c84a1", 500: "#3f6683", 600: "#31506a", 700: "#284157",
+            800: "#213548", 900: "#1b2c3c", 950: "#101d29",
+          },
+          amber: {
+            50: "#fdf6e8", 100: "#f8e8c2", 200: "#f0d18f", 300: "#e5b85c",
+            400: "#d6a03f", 500: "#c48a2e", 600: "#a8721f", 700: "#8a5c19",
+            800: "#6f4a17", 900: "#5c3d16",
+          },
+          stone: {
+            50: "#faf7f1", 100: "#f2ede2", 200: "#e5ddcd", 300: "#d3c6ac",
+            400: "#a89b83", 500: "#877967", 600: "#6b5f4f", 700: "#544a3e",
+            800: "#413a30", 900: "#332d26", 950: "#211d18",
+          },
+        },
+      },
+    },
+  };
+</script>
 <script type="importmap">
 {
   "imports": {
@@ -89,7 +119,10 @@ const ICON_CHOICES = Object.keys(ICONS);
 const PLACE_ICONS = { Landmark, Wallet, PiggyBank, TrendingUp, CreditCard, HandCoins, MoreHorizontal };
 const PLACE_ICON_CHOICES = Object.keys(PLACE_ICONS);
 const ALL_ICONS = { ...ICONS, ...PLACE_ICONS };
-const AVATAR_CHOICES = ["🧑", "👨", "👩", "👴", "👵", "🧔", "👦", "👧", "🧑‍💼", "🧑‍🎓"];
+const AVATAR_CHOICES = [
+  "🧑", "👨", "👩", "👴", "👵", "🧔", "👦", "👧", "🧑‍💼", "🧑‍🎓",
+  "👶", "🧓", "👨‍🦱", "👩‍🦱", "👨‍🦳", "👩‍🦳", "🧕", "👳", "😊", "🙂",
+];
 const COLOR_CHOICES = [
   "#1e3a5f", "#0f766e", "#b45309", "#9d174d", "#4338ca", "#15803d", "#a21caf", "#b91c1c",
   "#0891b2", "#ca8a04", "#be185d", "#4d7c0f", "#7c3aed", "#c2410c", "#0e7490", "#65a30d",
@@ -101,6 +134,11 @@ const fmt = (n) => `${CURRENCY}${Math.round(n || 0).toLocaleString("en-IN")}`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthKeyOf = (d) => (d || "").slice(0, 7);
 const thisMonthKey = () => todayISO().slice(0, 7);
+const lastMonthKey = () => {
+  const [y, m] = thisMonthKey().split("-").map(Number);
+  const d = new Date(y, m - 2, 1); // m is 1-indexed; m-2 rolls back one month
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
 const monthLabel = (mk) => {
   const [y, m] = mk.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
@@ -192,6 +230,7 @@ function seedData() {
     recurring: seedRecurring(),
     recurringLog: {},
     places: seedPlaces(),
+    allowances: [],
     settings: { overallBudget: 32000 },
   };
 }
@@ -235,12 +274,13 @@ function ProgressBar({ pct, tone = "ok" }) {
   );
 }
 
-function Pill({ active, onClick, children, icon: Icon }) {
+function Pill({ active, onClick, children, icon: Icon, color }) {
   return (
     <button
       onClick={onClick}
+      style={active && color ? { backgroundColor: color, color: "#fff" } : undefined}
       className={`px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap ${
-        active ? "bg-indigo-950 text-amber-50" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+        active ? (color ? "" : "bg-indigo-950 text-amber-50") : "bg-stone-100 text-stone-600 hover:bg-stone-200"
       }`}
     >
       {Icon && <Icon size={14} />}
@@ -298,6 +338,7 @@ const TRANSLATIONS = {
   transactions: { en: "Split / Transaction", mr: "खर्च / व्यवहार" },
   income: { en: "Income", mr: "उत्पन्न" },
   places: { en: "Places", mr: "खाती" },
+  gharKharcha: { en: "Ghar Kharcha", mr: "घर खर्च" },
   budgets: { en: "Budgets", mr: "बजेट" },
   debts: { en: "Debts", mr: "उधारी" },
   recurring: { en: "Recurring", mr: "आवर्ती" },
@@ -628,7 +669,11 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
       const delta = newTx.type === "income" ? newTx.amount : -newTx.amount;
       places = places.map((p) => (p.id === newTx.placeId ? { ...p, balance: (p.balance || 0) + delta } : p));
     }
-    persist({ ...data, transactions: [newTx, ...data.transactions], places });
+    let allowances = data.allowances || [];
+    if (newTx.allowanceId) {
+      allowances = allowances.map((a) => (a.id === newTx.allowanceId ? { ...a, balance: (a.balance || 0) - newTx.amount } : a));
+    }
+    persist({ ...data, transactions: [newTx, ...data.transactions], places, allowances });
   };
   // Adds an expense and, optionally, a family IOU debt (member B owes member A)
   // in a single save so both land together.
@@ -638,6 +683,10 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
     if (newTx.placeId) {
       const delta = newTx.type === "income" ? newTx.amount : -newTx.amount;
       places = places.map((p) => (p.id === newTx.placeId ? { ...p, balance: (p.balance || 0) + delta } : p));
+    }
+    let allowances = data.allowances || [];
+    if (newTx.allowanceId) {
+      allowances = allowances.map((a) => (a.id === newTx.allowanceId ? { ...a, balance: (a.balance || 0) - newTx.amount } : a));
     }
     let debts = data.debts;
     if (loan && loan.amount > 0 && loan.lenderId && loan.borrowerId && loan.lenderId !== loan.borrowerId) {
@@ -658,7 +707,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
         },
       ];
     }
-    persist({ ...data, transactions: [newTx, ...data.transactions], places, debts });
+    persist({ ...data, transactions: [newTx, ...data.transactions], places, allowances, debts });
   };
   const deleteTransaction = (id) => {
     const tx = data.transactions.find((t) => t.id === id);
@@ -667,7 +716,11 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
       const delta = tx.type === "income" ? -tx.amount : tx.amount;
       places = places.map((p) => (p.id === tx.placeId ? { ...p, balance: (p.balance || 0) + delta } : p));
     }
-    persist({ ...data, transactions: data.transactions.filter((t) => t.id !== id), places });
+    let allowances = data.allowances || [];
+    if (tx && tx.allowanceId) {
+      allowances = allowances.map((a) => (a.id === tx.allowanceId ? { ...a, balance: (a.balance || 0) + tx.amount } : a));
+    }
+    persist({ ...data, transactions: data.transactions.filter((t) => t.id !== id), places, allowances });
   };
   const updateTransaction = (id, patch) => {
     const old = data.transactions.find((t) => t.id === id);
@@ -684,7 +737,14 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
       const apply = updated.type === "income" ? updated.amount : -updated.amount;
       places = places.map((p) => (p.id === updated.placeId ? { ...p, balance: (p.balance || 0) + apply } : p));
     }
-    persist({ ...data, transactions: data.transactions.map((t) => (t.id === id ? updated : t)), places });
+    let allowances = data.allowances || [];
+    if (old.allowanceId) {
+      allowances = allowances.map((a) => (a.id === old.allowanceId ? { ...a, balance: (a.balance || 0) + old.amount } : a));
+    }
+    if (updated.allowanceId) {
+      allowances = allowances.map((a) => (a.id === updated.allowanceId ? { ...a, balance: (a.balance || 0) - updated.amount } : a));
+    }
+    persist({ ...data, transactions: data.transactions.map((t) => (t.id === id ? updated : t)), places, allowances });
   };
   const addPlace = (p) => persist({ ...data, places: [...(data.places || []), { id: uid("pl"), ...p }] });
   const updatePlace = (id, patch) => persist({ ...data, places: (data.places || []).map((p) => (p.id === id ? { ...p, ...patch } : p)) });
@@ -696,6 +756,17 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
     });
   const adjustPlace = (id, delta) =>
     persist({ ...data, places: (data.places || []).map((p) => (p.id === id ? { ...p, balance: (p.balance || 0) + delta } : p)) });
+  const addAllowance = (a) => persist({ ...data, allowances: [...(data.allowances || []), { id: uid("al"), ...a }] });
+  const updateAllowance = (id, patch) =>
+    persist({ ...data, allowances: (data.allowances || []).map((a) => (a.id === id ? { ...a, ...patch } : a)) });
+  const deleteAllowance = (id) =>
+    persist({
+      ...data,
+      allowances: (data.allowances || []).filter((a) => a.id !== id),
+      transactions: data.transactions.map((t) => (t.allowanceId === id ? { ...t, allowanceId: null } : t)),
+    });
+  const adjustAllowance = (id, delta) =>
+    persist({ ...data, allowances: (data.allowances || []).map((a) => (a.id === id ? { ...a, balance: (a.balance || 0) + delta } : a)) });
   const addMember = (m) => persist({ ...data, members: [...data.members, { id: uid("m"), ...m }] });
   const updateMember = (id, patch) => persist({ ...data, members: data.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
   const deleteMember = (id) => persist({ ...data, members: data.members.filter((m) => m.id !== id) });
@@ -970,21 +1041,32 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
     <LangContext.Provider value={{ lang, t }}>
     <div className="w-full min-h-screen bg-stone-50 text-stone-800 font-sans">
       {/* header */}
-      <div className="bg-indigo-950 text-amber-50 px-4 sm:px-6 pt-5 pb-4 rounded-b-2xl">
+      <div
+        className={`px-4 sm:px-6 pt-5 pb-4 rounded-b-2xl transition-colors duration-200 ${selectedMember ? "text-white" : "bg-indigo-950 text-amber-50"}`}
+        style={selectedMember ? { background: `linear-gradient(135deg, ${selectedMember.color || "#1e3a5f"}, ${selectedMember.color || "#1e3a5f"}cc)` } : undefined}
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-indigo-950">
-              <Stamp size={20} />
-            </div>
+            {selectedMember ? (
+              <Avatar member={selectedMember} size="lg" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-indigo-950">
+                <Stamp size={20} />
+              </div>
+            )}
             <div>
-              <h1 className="font-serif text-base sm:text-xl leading-tight">{t("appName")}</h1>
-              <p className="text-xs text-indigo-300 tracking-wide">{t("tagline")}</p>
+              <h1 className="font-serif text-base sm:text-xl leading-tight flex items-center gap-1.5">
+                {selectedMember ? selectedMember.name : t("appName")}
+              </h1>
+              <p className={`text-xs tracking-wide flex items-center gap-1 ${selectedMember ? "text-white/75" : "text-indigo-300"}`}>
+                {selectedMember ? (<><User size={11} /> Viewing personal data</>) : (<><Users size={11} /> {t("tagline")}</>)}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setLang(lang === "en" ? "mr" : "en")}
-              className="text-xs font-semibold bg-indigo-800 text-indigo-100 rounded-full px-3 py-1.5"
+              className={`text-xs font-semibold rounded-full px-3 py-1.5 ${selectedMember ? "bg-white/15 text-white" : "bg-indigo-800 text-indigo-100"}`}
             >
               {lang === "en" ? "मराठी" : "English"}
             </button>
@@ -992,11 +1074,11 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
               {data.members.slice(0, 4).map((m) => (
                 <Avatar key={m.id} member={m} size="sm" />
               ))}
-              <div className="w-7 h-7 rounded-full bg-indigo-800 flex items-center justify-center text-[10px] ml-1 ring-2 ring-indigo-950">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] ml-1 ring-2 ${selectedMember ? "bg-white/15 ring-white/20" : "bg-indigo-800 ring-indigo-950"}`}>
                 <SettingsIcon size={12} />
               </div>
             </button>
-            <button onClick={onSignOut} title="Sign out" className="w-8 h-8 rounded-full bg-indigo-800 flex items-center justify-center text-indigo-100">
+            <button onClick={onSignOut} title="Sign out" className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedMember ? "bg-white/15 text-white" : "bg-indigo-800 text-indigo-100"}`}>
               <LogOut size={14} />
             </button>
           </div>
@@ -1008,7 +1090,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
             {t("family")}
           </Pill>
           {data.members.map((m) => (
-            <Pill key={m.id} active={viewMode === m.id} onClick={() => setViewMode(m.id)} icon={User}>
+            <Pill key={m.id} active={viewMode === m.id} onClick={() => setViewMode(m.id)} icon={User} color={m.color}>
               {m.name}
             </Pill>
           ))}
@@ -1042,6 +1124,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
           ["transactions", t("transactions"), ListTree],
           ["income", t("income"), TrendingUp],
           ["places", t("places"), Wallet],
+          ["gharkharcha", t("gharKharcha"), HandCoins],
           ["budgets", t("budgets"), PiggyBank],
           ["debts", t("debts"), Landmark],
           ["recurring", t("recurring"), Repeat],
@@ -1108,10 +1191,22 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
         {tab === "places" && (
           <PlacesTab
             data={data}
+            viewMode={viewMode}
+            selectedMember={selectedMember}
             onAddPlace={addPlace}
             onUpdatePlace={updatePlace}
             onDeletePlace={deletePlace}
             onAdjustPlace={adjustPlace}
+          />
+        )}
+
+        {tab === "gharkharcha" && (
+          <AllowancesTab
+            data={data}
+            onAdd={addAllowance}
+            onUpdate={updateAllowance}
+            onDelete={deleteAllowance}
+            onAdjust={adjustAllowance}
           />
         )}
 
@@ -1131,6 +1226,8 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
         {tab === "debts" && (
           <DebtsTab
             data={data}
+            viewMode={viewMode}
+            selectedMember={selectedMember}
             paidOnDebt={paidOnDebt}
             onAdd={() => setShowAddDebt(true)}
             onPay={(d) => setPayDebt(d)}
@@ -1143,6 +1240,8 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
         {tab === "recurring" && (
           <RecurringTab
             data={data}
+            viewMode={viewMode}
+            selectedMember={selectedMember}
             onAdd={() => setShowAddRecurring(true)}
             onToggle={toggleRecurring}
             onDelete={deleteRecurring}
@@ -1361,6 +1460,40 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
   const overallRemaining = overallBudget - familyTotals.expense;
   const overallPct = overallBudget ? (familyTotals.expense / overallBudget) * 100 : 0;
 
+  // ── Same category-budget / pie / trend cards as the family view, but scoped
+  // to whichever person is selected, so individual view has full parity with family view.
+  const isPersonView = viewMode !== "family" && !!selectedMember;
+
+  const activeCategorySpend = (catId) => {
+    if (!isPersonView) return categorySpendThisMonth(catId);
+    return data.transactions
+      .filter((t) => t.type === "expense" && t.categoryId === catId && t.memberId === selectedMember.id && monthKeyOf(t.date) === thisMonthKey())
+      .reduce((s, t) => s + t.amount, 0);
+  };
+
+  const activeCategoryPie = isPersonView
+    ? data.categories
+        .map((c) => ({ id: c.id, name: c.name, color: c.color, value: activeCategorySpend(c.id) }))
+        .filter((d) => d.value > 0)
+    : categoryPie;
+
+  const memberTxOnly = isPersonView ? data.transactions.filter((t) => t.memberId === selectedMember.id) : [];
+  const activeMonthlyTrend = isPersonView
+    ? buildTrendSeries(memberTxOnly, data.categories, (d) => monthKeyOf(d), (k) => monthLabel(k), (k) => monthLabel(k)).slice(-6)
+    : monthlyTrend;
+  const activeYearlyTrend = isPersonView
+    ? buildTrendSeries(memberTxOnly, data.categories, (d) => (d || "").slice(0, 4), (k) => k, (k) => `Year ${k}`)
+    : yearlyTrend;
+  const activeDailyThisMonth = isPersonView
+    ? buildTrendSeries(
+        memberTxOnly.filter((t) => monthKeyOf(t.date) === thisMonthKey()),
+        data.categories,
+        (d) => d,
+        (k) => new Date(k).toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+        (k) => new Date(k).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+      )
+    : dailyThisMonth;
+
   // Date-filterable family summary (defaults to the current month).
   const [range, setRange] = useState(() => ({ from: thisMonthKey() + "-01", to: todayISO() }));
   const inRange = data.transactions.filter(
@@ -1474,13 +1607,14 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
         )
       )}
 
-      {viewMode === "family" && (
       <>
       <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-3">Category budgets — {monthLabel(thisMonthKey())}</h3>
+        <h3 className="font-serif text-base text-indigo-950 mb-3">
+          {isPersonView ? `${selectedMember.name}'s category spending — ${monthLabel(thisMonthKey())}` : `Category budgets — ${monthLabel(thisMonthKey())}`}
+        </h3>
         <div className="space-y-3">
           {data.categories.filter((c) => c.budgetLimit > 0).map((c) => {
-            const spent = categorySpendThisMonth(c.id);
+            const spent = activeCategorySpend(c.id);
             const pct = (spent / c.budgetLimit) * 100;
             return (
               <button
@@ -1504,17 +1638,22 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
               </button>
             );
           })}
+          {isPersonView && data.categories.filter((c) => c.budgetLimit > 0).every((c) => activeCategorySpend(c.id) === 0) && (
+            <p className="text-xs text-stone-400">No category spending yet this month.</p>
+          )}
         </div>
       </Card>
 
-      {categoryPie.length > 0 && (
+      {activeCategoryPie.length > 0 && (
         <Card className="p-4">
-          <h3 className="font-serif text-base text-indigo-950 mb-2">Spending by category — {monthLabel(thisMonthKey())}</h3>
+          <h3 className="font-serif text-base text-indigo-950 mb-2">
+            {isPersonView ? `${selectedMember.name}'s spending by category — ${monthLabel(thisMonthKey())}` : `Spending by category — ${monthLabel(thisMonthKey())}`}
+          </h3>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={categoryPie} dataKey="value" nameKey="name" innerRadius={45} outerRadius={80} paddingAngle={2} onClick={(entry) => onCategoryClick(entry.id)} cursor="pointer">
-                  {categoryPie.map((entry, i) => (
+                <Pie data={activeCategoryPie} dataKey="value" nameKey="name" innerRadius={45} outerRadius={80} paddingAngle={2} onClick={(entry) => onCategoryClick(entry.id)} cursor="pointer">
+                  {activeCategoryPie.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
@@ -1523,7 +1662,7 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1 justify-center">
-            {categoryPie.map((c, i) => (
+            {activeCategoryPie.map((c, i) => (
               <button key={i} type="button" onClick={() => onCategoryClick(c.id)} className="flex items-center gap-1.5 text-xs text-stone-500">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
                 {c.name}
@@ -1533,9 +1672,9 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
         </Card>
       )}
 
-      {monthlyTrend.length > 0 && (() => {
-        const trendData = trendView === "yearly" ? yearlyTrend : trendView === "daily" ? dailyThisMonth : monthlyTrend;
-        const trendTitle = trendView === "yearly" ? "Yearly trend" : trendView === "daily" ? `Daily — ${monthLabel(thisMonthKey())}` : "Monthly trend";
+      {activeMonthlyTrend.length > 0 && (() => {
+        const trendData = trendView === "yearly" ? activeYearlyTrend : trendView === "daily" ? activeDailyThisMonth : activeMonthlyTrend;
+        const trendTitle = (isPersonView ? `${selectedMember.name}'s ` : "") + (trendView === "yearly" ? "Yearly trend" : trendView === "daily" ? `Daily — ${monthLabel(thisMonthKey())}` : "Monthly trend");
         const isDaily = trendView === "daily";
         return (
         <Card className="p-4">
@@ -1583,7 +1722,6 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
         );
       })()}
       </>
-      )}
     </div>
   );
 }
@@ -1600,9 +1738,23 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === member.id).reduce((x, p) => x + p.amount, 0), 0);
 
+  // ── traceable, date-range summary (mirrors the Family summary card) ──
+  const [range, setRange] = useState(() => ({ from: thisMonthKey() + "-01", to: todayISO() }));
+  const inRangeTx = data.transactions.filter(
+    (t) => (!range.from || t.date >= range.from) && (!range.to || t.date <= range.to)
+  );
+  const rangeIncome = inRangeTx
+    .filter((t) => t.type === "income" && t.memberId === member.id)
+    .reduce((s, t) => s + t.amount, 0);
+  const rangeSpent = inRangeTx
+    .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === member.id).reduce((x, p) => x + p.amount, 0), 0);
+  const rangeNet = rangeIncome - rangeSpent;
+
   // this person's own sources
   const sources = (data.places || []).filter((p) => p.ownerId === member.id);
   const sourcesTotal = sources.reduce((s, p) => s + (p.balance || 0), 0);
+  const myAllowances = (data.allowances || []).filter((a) => a.memberId === member.id);
 
   // this person's debts (assigned to them) + family IOUs involving them
   const owedToThem = data.debts.filter(
@@ -1644,7 +1796,55 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
         <p className="text-[11px] text-white/70 mt-1">Own sources {fmt(sourcesTotal)} + owed {fmt(owedAmt)} − owe {fmt(oweAmt)}</p>
       </Card>
 
-      {/* income / spent this month */}
+      {/* traceable income / spent, any date range */}
+      <Card className="p-4 space-y-3.5">
+        <div className="flex items-center justify-between">
+          <h3 className="font-serif text-base text-indigo-950">My summary</h3>
+          <button
+            type="button"
+            onClick={() => setRange({ from: thisMonthKey() + "-01", to: todayISO() })}
+            className="text-[11px] font-medium text-amber-700 hover:underline"
+          >
+            This month
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">From</label>
+            <input type="date" className={inputCls} value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">Till</label>
+            <input type="date" className={inputCls} value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-emerald-50 p-3">
+            <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-medium mb-1">
+              <TrendingUp size={13} /> My income
+            </div>
+            <div className="font-mono text-xl font-semibold text-emerald-700 tabular-nums">{fmt(rangeIncome)}</div>
+          </div>
+          <div className="rounded-xl bg-rose-50 p-3">
+            <div className="flex items-center gap-1.5 text-rose-700 text-xs font-medium mb-1">
+              <TrendingDown size={13} /> My spent
+            </div>
+            <div className="font-mono text-xl font-semibold text-rose-700 tabular-nums">{fmt(rangeSpent)}</div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-1 border-t border-stone-100">
+          <span className="text-xs text-stone-500">Net for this period</span>
+          <span className={`font-mono text-sm font-semibold tabular-nums ${rangeNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+            {rangeNet >= 0 ? "+" : "−"}{fmt(Math.abs(rangeNet))}
+          </span>
+        </div>
+        <p className="text-[10px] text-stone-400">"Spent" = money paid from your own funds.</p>
+      </Card>
+
+      {/* income / spent this month, at a glance */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4">
           <div className="text-xs font-medium text-emerald-700 mb-1">Income (this month)</div>
@@ -1703,6 +1903,23 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
           {sources.length === 0 && <p className="text-xs text-stone-400">No sources yet. Add one in the Places tab and set "Belongs to" this person.</p>}
         </div>
       </Card>
+
+      {/* my ghar kharcha allowance */}
+      {myAllowances.length > 0 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-serif text-base text-indigo-950 flex items-center gap-1.5"><HandCoins size={15} /> My Ghar Kharcha</h3>
+          </div>
+          <div className="space-y-2">
+            {myAllowances.map((a) => (
+              <div key={a.id} className="flex items-center justify-between">
+                <span className="text-sm flex-1 min-w-0 truncate">{a.note || "Household allowance"}</span>
+                <span className={`font-mono text-sm tabular-nums ${a.balance < 0 ? "text-rose-600" : "text-stone-500"}`}>{fmt(a.balance)} left</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* my debts */}
       {(owedToThem.length > 0 || theyOwe.length > 0) && (
@@ -1892,25 +2109,32 @@ function TransactionsTab({ data, mode = "expense", filters, setFilters, filtered
 
 /* ---------------------------------- Places ---------------------------------- */
 
-function PlacesTab({ data, onAddPlace, onUpdatePlace, onDeletePlace, onAdjustPlace }) {
+function PlacesTab({ data, viewMode, selectedMember, onAddPlace, onUpdatePlace, onDeletePlace, onAdjustPlace }) {
   const [showNew, setShowNew] = useState(false);
   const [adjusting, setAdjusting] = useState(null);
-  const places = data.places || [];
+  const [editingId, setEditingId] = useState(null);
+  const isPersonView = viewMode !== "family" && !!selectedMember;
+  // In a person's view: show their own places plus any shared (no-owner) family places.
+  // Other people's individually-owned places are hidden to keep this scoped to them.
+  const places = (data.places || []).filter(
+    (p) => !isPersonView || !p.ownerId || p.ownerId === selectedMember.id
+  );
   const total = places.reduce((s, p) => s + (p.balance || 0), 0);
   const adjustingPlace = places.find((p) => p.id === adjusting);
+  const editingPlace = places.find((p) => p.id === editingId);
 
   return (
     <div className="space-y-4">
       <Card className="p-5 bg-gradient-to-br from-indigo-950 to-indigo-900 text-amber-50 border-none">
         <div className="flex items-center gap-2 text-indigo-300 text-xs uppercase tracking-wide mb-1">
-          <Wallet size={13} /> Total across places
+          <Wallet size={13} /> {isPersonView ? `${selectedMember.name}'s total` : "Total across places"}
         </div>
         <div className="font-mono text-3xl font-semibold tabular-nums">{fmt(total)}</div>
         <p className="text-xs text-indigo-300 mt-1">{useLang().t("moneyEverywhere")}</p>
       </Card>
 
       <div className="flex items-center justify-between">
-        <h3 className="font-serif text-base text-indigo-950">Your places</h3>
+        <h3 className="font-serif text-base text-indigo-950">{isPersonView ? `${selectedMember.name}'s places` : "Your places"}</h3>
         <button onClick={() => setShowNew(true)} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full flex items-center gap-1">
           <Plus size={13} /> Place
         </button>
@@ -1938,6 +2162,13 @@ function PlacesTab({ data, onAddPlace, onUpdatePlace, onDeletePlace, onAdjustPla
               >
                 Adjust
               </button>
+              <button
+                onClick={() => setEditingId(p.id)}
+                className="text-stone-400 hover:text-indigo-950 p-1 shrink-0"
+                title="Edit"
+              >
+                <Pencil size={14} />
+              </button>
               <button onClick={() => onDeletePlace(p.id)} className="text-stone-300 hover:text-rose-600 p-1 shrink-0">
                 <Trash2 size={14} />
               </button>
@@ -1957,6 +2188,16 @@ function PlacesTab({ data, onAddPlace, onUpdatePlace, onDeletePlace, onAdjustPla
         </Modal>
       )}
 
+      {editingPlace && (
+        <Modal title={`Edit — ${editingPlace.name}`} onClose={() => setEditingId(null)}>
+          <NewPlaceForm
+            members={data.members}
+            editing={editingPlace}
+            onSave={(patch) => { onUpdatePlace(editingId, patch); setEditingId(null); }}
+          />
+        </Modal>
+      )}
+
       {adjustingPlace && (
         <Modal title={`Adjust — ${adjustingPlace.name}`} onClose={() => setAdjusting(null)}>
           <AdjustPlaceForm
@@ -1969,12 +2210,12 @@ function PlacesTab({ data, onAddPlace, onUpdatePlace, onDeletePlace, onAdjustPla
   );
 }
 
-function NewPlaceForm({ onSave, members = [] }) {
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState("Wallet");
-  const [color, setColor] = useState(COLOR_CHOICES[0]);
-  const [balance, setBalance] = useState(0);
-  const [ownerId, setOwnerId] = useState("");
+function NewPlaceForm({ onSave, members = [], editing = null }) {
+  const [name, setName] = useState(editing?.name || "");
+  const [icon, setIcon] = useState(editing?.icon || "Wallet");
+  const [color, setColor] = useState(editing?.color || COLOR_CHOICES[0]);
+  const [balance, setBalance] = useState("");
+  const [ownerId, setOwnerId] = useState(editing?.ownerId || "");
   return (
     <div>
       <Field label="Name">
@@ -2002,15 +2243,21 @@ function NewPlaceForm({ onSave, members = [] }) {
           ))}
         </div>
       </Field>
-      <Field label="Starting balance">
-        <input type="number" className={inputCls} value={balance} onChange={(e) => setBalance(Number(e.target.value))} />
-      </Field>
+      {!editing && (
+        <Field label="Starting balance">
+          <input type="number" className={inputCls} value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0" />
+        </Field>
+      )}
       <button
         disabled={!name}
-        onClick={() => onSave({ name, icon, color, balance: Number(balance) || 0, ownerId: ownerId || null })}
+        onClick={() =>
+          editing
+            ? onSave({ name, icon, color, ownerId: ownerId || null })
+            : onSave({ name, icon, color, balance: Number(balance) || 0, ownerId: ownerId || null })
+        }
         className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
       >
-        Save place
+        {editing ? "Save changes" : "Save place"}
       </button>
     </div>
   );
@@ -2042,11 +2289,139 @@ function AdjustPlaceForm({ currentBalance, onSave }) {
   );
 }
 
+/* ---------------------------------- Ghar Kharcha (household allowance) ---------------------------------- */
+// Deliberately separate from "Places" — this tracks day-to-day household spending money
+// handed to a family member (often a non-earning member), not bank accounts/investments.
+
+function AllowancesTab({ data, onAdd, onUpdate, onDelete, onAdjust }) {
+  const [showNew, setShowNew] = useState(false);
+  const [adjusting, setAdjusting] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const allowances = data.allowances || [];
+  const total = allowances.reduce((s, a) => s + (a.balance || 0), 0);
+  const adjustingItem = allowances.find((a) => a.id === adjusting);
+  const editingItem = allowances.find((a) => a.id === editingId);
+  const memberOf = (id) => data.members.find((m) => m.id === id);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 bg-gradient-to-br from-amber-500 to-amber-400 text-indigo-950 border-none">
+        <div className="flex items-center gap-2 text-indigo-900/70 text-xs uppercase tracking-wide mb-1">
+          <HandCoins size={13} /> Total household allowance
+        </div>
+        <div className="font-mono text-3xl font-semibold tabular-nums">{fmt(total)}</div>
+        <p className="text-xs text-indigo-900/70 mt-1">Everyday spending money handed to family members — kept separate from bank accounts and savings.</p>
+      </Card>
+
+      <div className="flex items-center justify-between">
+        <h3 className="font-serif text-base text-indigo-950">Allowances</h3>
+        <button onClick={() => setShowNew(true)} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full flex items-center gap-1">
+          <Plus size={13} /> Allowance
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {allowances.map((a) => {
+          const m = memberOf(a.memberId);
+          return (
+            <Card key={a.id} className="p-3.5">
+              <div className="flex items-center gap-3">
+                <Avatar member={m} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{m?.name || "Unknown"}</div>
+                  {a.note && <div className="text-[11px] text-stone-400 truncate">{a.note}</div>}
+                  <div className={`font-mono text-sm tabular-nums ${a.balance < 0 ? "text-rose-600" : "text-stone-500"}`}>
+                    {fmt(a.balance)} left
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAdjusting(a.id)}
+                  className="text-xs font-semibold text-indigo-950 bg-stone-100 px-2.5 py-1.5 rounded-lg shrink-0"
+                >
+                  Top up
+                </button>
+                <button onClick={() => setEditingId(a.id)} className="text-stone-400 hover:text-indigo-950 p-1 shrink-0" title="Edit">
+                  <Pencil size={14} />
+                </button>
+                <button onClick={() => onDelete(a.id)} className="text-stone-300 hover:text-rose-600 p-1 shrink-0">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </Card>
+          );
+        })}
+        {allowances.length === 0 && (
+          <p className="text-center text-sm text-stone-400 py-8">
+            No allowances yet. Add one to hand a family member everyday spending money — separate from bank accounts.
+          </p>
+        )}
+      </div>
+
+      {showNew && (
+        <Modal title="New allowance" onClose={() => setShowNew(false)}>
+          <NewAllowanceForm members={data.members} onSave={(a) => { onAdd(a); setShowNew(false); }} />
+        </Modal>
+      )}
+
+      {editingItem && (
+        <Modal title={`Edit — ${memberOf(editingItem.memberId)?.name || ""}`} onClose={() => setEditingId(null)}>
+          <NewAllowanceForm
+            members={data.members}
+            editing={editingItem}
+            onSave={(patch) => { onUpdate(editingId, patch); setEditingId(null); }}
+          />
+        </Modal>
+      )}
+
+      {adjustingItem && (
+        <Modal title={`Top up — ${memberOf(adjustingItem.memberId)?.name || ""}`} onClose={() => setAdjusting(null)}>
+          <AdjustPlaceForm
+            currentBalance={adjustingItem.balance}
+            onSave={(delta) => { onAdjust(adjusting, delta); setAdjusting(null); }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function NewAllowanceForm({ onSave, members = [], editing = null }) {
+  const [memberId, setMemberId] = useState(editing?.memberId || members[0]?.id || "");
+  const [note, setNote] = useState(editing?.note || "");
+  const [balance, setBalance] = useState("");
+  return (
+    <div>
+      <Field label="Family member">
+        <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+          {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Note (optional)">
+        <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Monthly groceries allowance" />
+      </Field>
+      {!editing && (
+        <Field label="Starting amount">
+          <input type="number" className={inputCls} value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0" />
+        </Field>
+      )}
+      <button
+        disabled={!memberId}
+        onClick={() => (editing ? onSave({ memberId, note }) : onSave({ memberId, note, balance: Number(balance) || 0 }))}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+      >
+        {editing ? "Save changes" : "Save allowance"}
+      </button>
+    </div>
+  );
+}
+
 /* ---------------------------------- Budgets ---------------------------------- */
 
 function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCategory, onAddCategory, onDeleteCategory, onUpdateSettings, onCategoryClick }) {
   const [editing, setEditing] = useState(null);
   const [showNew, setShowNew] = useState(false);
+  const [editingCat, setEditingCat] = useState(null);
+  const editingCategory = data.categories.find((c) => c.id === editingCat);
 
   return (
     <div className="space-y-4">
@@ -2099,6 +2474,9 @@ function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCatego
                     {fmt(c.budgetLimit)}
                   </button>
                 )}
+                <button onClick={() => setEditingCat(c.id)} className="text-stone-400 hover:text-indigo-950 p-1" title="Edit">
+                  <Pencil size={14} />
+                </button>
                 {!c.isSystem && (
                   <button onClick={() => onDeleteCategory(c.id)} className="text-stone-300 hover:text-rose-600 p-1">
                     <Trash2 size={14} />
@@ -2112,18 +2490,27 @@ function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCatego
 
       {showNew && (
         <Modal title="New category" onClose={() => setShowNew(false)}>
-          <NewCategoryForm onSave={(c) => { onAddCategory(c); setShowNew(false); }} />
+          <NewCategoryForm existingCount={data.categories.length} onSave={(c) => { onAddCategory(c); setShowNew(false); }} />
+        </Modal>
+      )}
+
+      {editingCategory && (
+        <Modal title={`Edit — ${editingCategory.name}`} onClose={() => setEditingCat(null)}>
+          <NewCategoryForm
+            editing={editingCategory}
+            onSave={(patch) => { onUpdateCategory(editingCat, patch); setEditingCat(null); }}
+          />
         </Modal>
       )}
     </div>
   );
 }
 
-function NewCategoryForm({ onSave, compact }) {
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState("MoreHorizontal");
-  const [color, setColor] = useState(COLOR_CHOICES[0]);
-  const [budget, setBudget] = useState(1000);
+function NewCategoryForm({ onSave, compact, editing = null, existingCount = 0 }) {
+  const [name, setName] = useState(editing?.name || "");
+  const [icon, setIcon] = useState(editing?.icon || "MoreHorizontal");
+  const [color, setColor] = useState(editing?.color || COLOR_CHOICES[existingCount % COLOR_CHOICES.length]);
+  const [budget, setBudget] = useState(editing?.budgetLimit ?? 1000);
   return (
     <div>
       <Field label="Name">
@@ -2153,7 +2540,7 @@ function NewCategoryForm({ onSave, compact }) {
         onClick={() => onSave({ name, icon, color, budgetLimit: budget })}
         className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
       >
-        {compact ? "Add category" : "Save category"}
+        {editing ? "Save changes" : compact ? "Add category" : "Save category"}
       </button>
     </div>
   );
@@ -2177,14 +2564,23 @@ function debtSettledDate(d, transactions) {
 const shortDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
 
-function DebtsTab({ data, paidOnDebt, onAdd, onPay, onDelete, onSettle, onReopen }) {
+function DebtsTab({ data, viewMode, selectedMember, paidOnDebt, onAdd, onPay, onDelete, onSettle, onReopen }) {
   const [showSettled, setShowSettled] = useState(true);
   const txs = data.transactions;
   const settled = (d) => isDebtSettled(d, txs);
+  const isPersonView = viewMode !== "family" && !!selectedMember;
 
-  const owedActive = data.debts.filter((d) => d.direction === "owed_to_me" && !settled(d));
-  const oweActive = data.debts.filter((d) => d.direction === "i_owe" && !settled(d));
-  const completed = data.debts
+  // Scope to the selected person's own debts/IOUs — same rule as PersonDashboard's "My debts" card:
+  // external debts assigned to them, or internal family loans where they're the lender/borrower.
+  const belongsToPerson = (d) =>
+    !isPersonView ||
+    (!d.internal && d.memberId === selectedMember.id) ||
+    (d.internal && (d.fromMember === selectedMember.id || d.toMember === selectedMember.id));
+
+  const allDebts = data.debts.filter(belongsToPerson);
+  const owedActive = allDebts.filter((d) => d.direction === "owed_to_me" && !settled(d));
+  const oweActive = allDebts.filter((d) => d.direction === "i_owe" && !settled(d));
+  const completed = allDebts
     .filter((d) => settled(d))
     .sort((a, b) => debtSettledDate(b, txs).localeCompare(debtSettledDate(a, txs)));
 
@@ -2194,8 +2590,8 @@ function DebtsTab({ data, paidOnDebt, onAdd, onPay, onDelete, onSettle, onReopen
         <Plus size={15} /> Add a debt
       </button>
 
-      <DebtGroup title="Owed to you" tone="emerald" debts={owedActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} />
-      <DebtGroup title="You owe" tone="rose" debts={oweActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} />
+      <DebtGroup title={isPersonView ? `Money coming to ${selectedMember.name}` : "Money coming to you"} tone="emerald" debts={owedActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} members={data.members} />
+      <DebtGroup title={isPersonView ? `${selectedMember.name} needs to pay` : "Money you need to pay"} tone="rose" debts={oweActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} members={data.members} />
 
       {completed.length > 0 && (
         <div>
@@ -2227,8 +2623,9 @@ function DebtsTab({ data, paidOnDebt, onAdd, onPay, onDelete, onSettle, onReopen
   );
 }
 
-function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle }) {
+function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle, members = [] }) {
   const color = tone === "emerald" ? "text-emerald-700" : "text-rose-700";
+  const memberName = (id) => members.find((m) => m.id === id)?.name;
   return (
     <div>
       <h3 className={`font-serif text-base mb-2 ${color}`}>{title}</h3>
@@ -2247,6 +2644,11 @@ function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle }
                       <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">family</span>
                     )}
                   </div>
+                  {d.memberId && memberName(d.memberId) && (
+                    <div className="text-[11px] text-stone-400">
+                      {tone === "emerald" ? "Given by / to receive back by" : "To be paid by"} {memberName(d.memberId)}
+                    </div>
+                  )}
                   {d.note && <div className="text-xs text-stone-400">{d.note}</div>}
                   {d.dueDate && <div className="text-[11px] text-stone-400">Due {shortDate(d.dueDate)}</div>}
                 </div>
@@ -2296,7 +2698,7 @@ function SettledDebtCard({ debt: d, paid, settledOn, onDelete, onReopen }) {
           </div>
           {d.note && <div className="text-xs text-stone-400 truncate">{d.note}</div>}
           <div className="text-[11px] text-stone-400 mt-0.5">
-            <span className={toneText}>{d.direction === "owed_to_me" ? "Was owed to you" : "You owed"}</span>
+            <span className={toneText}>{d.direction === "owed_to_me" ? "Was to be paid to you" : "You had to pay this"}</span>
             {" · "}{fmt(d.totalAmount)}
             {settledOn ? ` · cleared ${shortDate(settledOn)}` : ""}
           </div>
@@ -2317,26 +2719,67 @@ function AddDebtModal({ onClose, onSave, members = [] }) {
   const [dueDate, setDueDate] = useState("");
   const [note, setNote] = useState("");
   const [memberId, setMemberId] = useState("");
+
+  const memberName = members.find((m) => m.id === memberId)?.name;
+  const familyLabel = memberName || "your family";
+  const otherLabel = personName || "this person";
+  const amountLabel = totalAmount ? fmt(Number(totalAmount)) : "₹___";
+
+  const summary =
+    direction === "owed_to_me"
+      ? `${otherLabel} needs to pay ${familyLabel} ${amountLabel}`
+      : `${familyLabel} needs to pay ${otherLabel} ${amountLabel}`;
+
   return (
     <Modal title="Add a debt" onClose={onClose}>
-      <Field label="Person / institution">
-        <input className={inputCls} value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="e.g. Ramesh, Bajaj Finserv" />
+      <Field label="What happened?">
+        <div className="grid grid-cols-1 gap-2">
+          <button
+            onClick={() => setDirection("owed_to_me")}
+            className={`text-left rounded-xl border-2 p-3 transition-colors ${direction === "owed_to_me" ? "border-emerald-600 bg-emerald-50" : "border-stone-200 bg-white"}`}
+          >
+            <div className="text-sm font-semibold text-emerald-700">Someone needs to pay us</div>
+            <div className="text-[11px] text-stone-500">e.g. you gave a loan, or someone needs to pay you back for something</div>
+          </button>
+          <button
+            onClick={() => setDirection("i_owe")}
+            className={`text-left rounded-xl border-2 p-3 transition-colors ${direction === "i_owe" ? "border-rose-600 bg-rose-50" : "border-stone-200 bg-white"}`}
+          >
+            <div className="text-sm font-semibold text-rose-700">We need to pay someone</div>
+            <div className="text-[11px] text-stone-500">e.g. you took a loan, or still need to pay a bill/bank</div>
+          </button>
+        </div>
       </Field>
-      <Field label="Whose debt? (shows on their dashboard)">
+
+      <Field label={direction === "owed_to_me" ? "Who needs to pay this?" : "Who do we need to pay?"}>
+        <input
+          className={inputCls}
+          list="debt-person-suggestions"
+          value={personName}
+          onChange={(e) => setPersonName(e.target.value)}
+          placeholder="Type a name, or pick a family member"
+        />
+        <datalist id="debt-person-suggestions">
+          {members.map((m) => <option key={m.id} value={m.name} />)}
+        </datalist>
+      </Field>
+
+      <Field label={direction === "owed_to_me" ? "Which family member gave this / should receive it back?" : "Which family member took this / needs to pay it?"}>
         <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-          <option value="">Family (no one in particular)</option>
+          <option value="">Family in general (no one specific)</option>
           {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
       </Field>
-      <Field label="Direction">
-        <div className="flex gap-2">
-          <Pill active={direction === "owed_to_me"} onClick={() => setDirection("owed_to_me")}>Owed to me</Pill>
-          <Pill active={direction === "i_owe"} onClick={() => setDirection("i_owe")}>I owe</Pill>
-        </div>
-      </Field>
-      <Field label="Total amount">
+
+      <Field label="Amount">
         <input type="number" className={inputCls} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} />
       </Field>
+
+      <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 mb-3 text-sm text-stone-700">
+        <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide block mb-0.5">This will record:</span>
+        {summary}
+      </div>
+
       <Field label="Due date (optional)">
         <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
       </Field>
@@ -2418,14 +2861,16 @@ function PayDebtModal({ debt, data, incomeMembers, paidSoFar, onClose, onSave })
 
 /* ---------------------------------- Recurring ---------------------------------- */
 
-function RecurringTab({ data, onAdd, onToggle, onDelete, onApply, pendingIds }) {
+function RecurringTab({ data, viewMode, selectedMember, onAdd, onToggle, onDelete, onApply, pendingIds }) {
+  const isPersonView = viewMode !== "family" && !!selectedMember;
+  const recurring = (data.recurring || []).filter((r) => !isPersonView || r.memberId === selectedMember.id);
   return (
     <div className="space-y-4">
       <button onClick={onAdd} className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm flex items-center justify-center gap-1.5">
         <Plus size={15} /> New recurring entry
       </button>
       <div className="space-y-2.5">
-        {data.recurring.map((r) => {
+        {recurring.map((r) => {
           const cat = data.categories.find((c) => c.id === r.categoryId);
           const mem = data.members.find((m) => m.id === r.memberId);
           const isPending = pendingIds.includes(r.id);
@@ -2451,7 +2896,11 @@ function RecurringTab({ data, onAdd, onToggle, onDelete, onApply, pendingIds }) 
             </Card>
           );
         })}
-        {data.recurring.length === 0 && <p className="text-center text-sm text-stone-400 py-8">Koi recurring entry nahi hai.</p>}
+        {recurring.length === 0 && (
+          <p className="text-center text-sm text-stone-400 py-8">
+            {isPersonView ? `No recurring entries for ${selectedMember.name}.` : "Koi recurring entry nahi hai."}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -2675,6 +3124,18 @@ function MembersModal({ data, onClose, onAdd, onUpdate, onDelete }) {
                 <input type="checkbox" checked={m.isIncomeSource} onChange={(e) => onUpdate(m.id, { isIncomeSource: e.target.checked })} />
                 Income source (paisa kamata hai)
               </label>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {AVATAR_CHOICES.map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => onUpdate(m.id, { avatar: a })}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-sm border-2"
+                    style={{ borderColor: a === m.avatar ? "#1e293b" : "transparent", backgroundColor: `${m.color || "#78716c"}18` }}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {COLOR_CHOICES.map((c) => (
                   <button
@@ -2760,6 +3221,7 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
   const [spentBy, setSpentBy] = useState((editing && type === "expense" ? editing.memberId : null) || data.members[0]?.id || "");
   const [incomeSource, setIncomeSource] = useState((editing && type === "income" ? editing.memberId : null) || incomeMembers[0]?.id || "");
   const [placeId, setPlaceId] = useState(editing?.placeId || "");
+  const [allowanceId, setAllowanceId] = useState(editing?.allowanceId || "");
   const [date, setDate] = useState(editing?.date || todayISO());
   const [note, setNote] = useState(editing?.note || "");
   const [splitMode, setSplitMode] = useState(derivedSplit.mode);
@@ -2819,7 +3281,7 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
           </div>
           {showNewCategory && (
             <div className="mt-2 p-3 rounded-xl bg-stone-50 border border-stone-200">
-              <NewCategoryForm onSave={handleAddCategory} compact />
+              <NewCategoryForm existingCount={data.categories.length} onSave={handleAddCategory} compact />
             </div>
           )}
         </Field>
@@ -2925,6 +3387,18 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
         </Field>
       )}
 
+      {type === "expense" && (data.allowances || []).length > 0 && (
+        <Field label="Spend from Ghar Kharcha allowance?">
+          <select className={inputCls} value={allowanceId} onChange={(e) => setAllowanceId(e.target.value)}>
+            <option value="">Not from an allowance</option>
+            {data.allowances.map((a) => {
+              const m = data.members.find((mm) => mm.id === a.memberId);
+              return <option key={a.id} value={a.id}>{m?.name || "?"}'s allowance ({fmt(a.balance)} left)</option>;
+            })}
+          </select>
+        </Field>
+      )}
+
       <Field label="Date">
         <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
       </Field>
@@ -2940,6 +3414,7 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
             memberId: type === "expense" ? spentBy : incomeSource,
             date, note, paidFrom: type === "expense" ? buildPaidFrom() : [],
             placeId: placeId || null,
+            allowanceId: type === "expense" ? (allowanceId || null) : null,
           };
           if (editing) {
             onUpdate(editing.id, payload); // debtId/recurringId preserved from the original
