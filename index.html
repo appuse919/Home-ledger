@@ -83,6 +83,12 @@ import {
   AlertTriangle, Check, Trash2, Calendar, RefreshCw, PiggyBank, Settings as SettingsIcon,
   ArrowUpRight, ArrowDownRight, Upload, HandCoins, LayoutGrid, ListTree, Landmark, Repeat, Stamp, Lock, Pencil, ChevronDown,
   LogOut, Mail, KeyRound, UserCheck, Clock, ShieldCheck,
+  Plane, Bus, Fuel, GraduationCap, Baby, PawPrint, Smartphone, Wifi, Coffee, Pizza, Dumbbell,
+  Stethoscope, Scissors, Shirt, Gamepad2, Music, Briefcase, Wrench, Sparkles, Palette, TreePine,
+  Gift, Bike, Train, ShoppingCart, Pill, Cake, Tv, Camera, Book, Church, Umbrella,
+  Droplet, Flame, Trash, Hammer, Gem, Glasses, Dog, Cat, Fish,
+  Flower2, Sun, Snowflake, Building2, Store, Bed, Sofa, Lightbulb, Phone, Laptop, Headphones,
+  Bookmark, MapPin, Ticket, Popcorn, Wine, Beer, IceCreamCone, Salad,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -114,6 +120,12 @@ const requestsCol = collection(db, "requests");
 const ICONS = {
   UtensilsCrossed, Home, Car, Zap, ShoppingBag, HeartPulse, Film, BookOpen, CreditCard,
   MoreHorizontal, HandCoins, Landmark,
+  Plane, Bus, Fuel, GraduationCap, Baby, PawPrint, Smartphone, Wifi, Coffee, Pizza, Dumbbell,
+  Stethoscope, Scissors, Shirt, Gamepad2, Music, Briefcase, Wrench, Sparkles, Palette, TreePine,
+  Gift, Bike, Train, ShoppingCart, Pill, Cake, Tv, Camera, Book, Church, Umbrella,
+  Droplet, Flame, Trash, Hammer, Gem, Glasses, Dog, Cat, Fish,
+  Flower2, Sun, Snowflake, Building2, Store, Bed, Sofa, Lightbulb, Phone, Laptop, Headphones,
+  Bookmark, MapPin, Ticket, Popcorn, Wine, Beer, IceCreamCone, Salad,
 };
 const ICON_CHOICES = Object.keys(ICONS);
 const PLACE_ICONS = { Landmark, Wallet, PiggyBank, TrendingUp, CreditCard, HandCoins, MoreHorizontal };
@@ -123,11 +135,33 @@ const AVATAR_CHOICES = [
   "🧑", "👨", "👩", "👴", "👵", "🧔", "👦", "👧", "🧑‍💼", "🧑‍🎓",
   "👶", "🧓", "👨‍🦱", "👩‍🦱", "👨‍🦳", "👩‍🦳", "🧕", "👳", "😊", "🙂",
 ];
-const COLOR_CHOICES = [
-  "#1e3a5f", "#0f766e", "#b45309", "#9d174d", "#4338ca", "#15803d", "#a21caf", "#b91c1c",
-  "#0891b2", "#ca8a04", "#be185d", "#4d7c0f", "#7c3aed", "#c2410c", "#0e7490", "#65a30d",
-  "#db2777", "#6d28d9", "#0d9488", "#ea580c", "#57534e", "#334155", "#166534", "#831843",
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+function rgbToHex(r, g, b) {
+  return "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+}
+function mixHex(hex1, hex2, weight) {
+  const c1 = hexToRgb(hex1), c2 = hexToRgb(hex2);
+  return rgbToHex(c1.r + (c2.r - c1.r) * weight, c1.g + (c2.g - c1.g) * weight, c1.b + (c2.b - c1.b) * weight);
+}
+// One representative hue per column; each gets 5 shades (light tint → base → dark shade),
+// like the Standard/Theme Colors grid in Word/Office.
+const BASE_HUES = [
+  "#b91c1c", "#c2410c", "#b45309", "#ca8a04", "#4d7c0f", "#15803d",
+  "#0f766e", "#0e7490", "#1e3a5f", "#4338ca", "#7c3aed", "#a21caf",
+  "#be185d", "#57534e", "#334155",
 ];
+const shadesOf = (hex) => [
+  mixHex(hex, "#ffffff", 0.7),
+  mixHex(hex, "#ffffff", 0.4),
+  hex,
+  mixHex(hex, "#000000", 0.25),
+  mixHex(hex, "#000000", 0.5),
+];
+const COLOR_SHADE_GRID = BASE_HUES.map(shadesOf); // [hue][shade], shade 0 = lightest, 4 = darkest
+const COLOR_CHOICES = COLOR_SHADE_GRID.flat();
 
 const CURRENCY = "₹";
 const fmt = (n) => `${CURRENCY}${Math.round(n || 0).toLocaleString("en-IN")}`;
@@ -289,9 +323,9 @@ function Pill({ active, onClick, children, icon: Icon, color }) {
   );
 }
 
-function Card({ children, className = "" }) {
+function Card({ children, className = "", style }) {
   return (
-    <div className={`bg-white rounded-2xl border border-stone-200 shadow-sm ${className}`}>
+    <div className={`bg-white rounded-2xl border border-stone-200 shadow-sm ${className}`} style={style}>
       {children}
     </div>
   );
@@ -323,6 +357,52 @@ function Field({ label, children }) {
 }
 
 const inputCls = "w-full px-3 py-2.5 rounded-lg border border-stone-300 bg-white text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm";
+
+function ColorPicker({ value, onChange }) {
+  return (
+    <div>
+      <div
+        className="grid gap-1 mb-2.5 overflow-x-auto pb-1"
+        style={{
+          gridTemplateColumns: `repeat(${BASE_HUES.length}, minmax(18px, 1fr))`,
+          gridTemplateRows: `repeat(${COLOR_SHADE_GRID[0].length}, minmax(0, 1fr))`,
+          gridAutoFlow: "column",
+        }}
+      >
+        {COLOR_SHADE_GRID.map((column, colIdx) =>
+          column.map((c, rowIdx) => (
+            <button
+              key={`${colIdx}-${rowIdx}`}
+              type="button"
+              onClick={() => onChange(c)}
+              className="aspect-square w-full rounded-sm"
+              style={{
+                backgroundColor: c,
+                outline: c.toLowerCase() === value.toLowerCase() ? "2px solid #1e293b" : "1px solid rgba(0,0,0,0.08)",
+                outlineOffset: c.toLowerCase() === value.toLowerCase() ? "1px" : "0",
+              }}
+              title={c}
+            />
+          ))
+        )}
+      </div>
+      <label className="flex items-center gap-2 text-xs text-stone-500">
+        <span
+          className="w-7 h-7 rounded-full border-2 flex-shrink-0 relative overflow-hidden"
+          style={{ backgroundColor: value, borderColor: "#1e293b" }}
+        >
+          <input
+            type="color"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+        </span>
+        Or pick any custom color
+      </label>
+    </div>
+  );
+}
 
 /* ---------------------------------- language / translations ---------------------------------- */
 
@@ -2237,11 +2317,7 @@ function NewPlaceForm({ onSave, members = [], editing = null }) {
         </div>
       </Field>
       <Field label="Color">
-        <div className="flex flex-wrap gap-2">
-          {COLOR_CHOICES.map((c) => (
-            <button key={c} onClick={() => setColor(c)} className="w-7 h-7 rounded-full border-2" style={{ backgroundColor: c, borderColor: c === color ? "#1e293b" : "transparent" }} />
-          ))}
-        </div>
+        <ColorPicker value={color} onChange={setColor} />
       </Field>
       {!editing && (
         <Field label="Starting balance">
@@ -2526,11 +2602,7 @@ function NewCategoryForm({ onSave, compact, editing = null, existingCount = 0 })
         </div>
       </Field>
       <Field label="Color">
-        <div className="flex flex-wrap gap-2">
-          {COLOR_CHOICES.map((c) => (
-            <button key={c} onClick={() => setColor(c)} className="w-7 h-7 rounded-full border-2" style={{ backgroundColor: c, borderColor: c === color ? "#1e293b" : "transparent" }} />
-          ))}
-        </div>
+        <ColorPicker value={color} onChange={setColor} />
       </Field>
       <Field label="Monthly budget">
         <input type="number" className={inputCls} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
@@ -3153,6 +3225,19 @@ function MembersModal({ data, onClose, onAdd, onUpdate, onDelete }) {
       </div>
 
       <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Add new member</h4>
+
+      {/* live preview — shows exactly how this member's avatar + name will look on their dashboard */}
+      <div
+        className="rounded-2xl p-4 mb-4 flex items-center gap-3 text-white"
+        style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
+      >
+        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-2xl">{avatar}</div>
+        <div>
+          <div className="font-serif text-lg leading-tight">{name || "New member"}</div>
+          <div className="text-xs text-white/75">Preview</div>
+        </div>
+      </div>
+
       <Field label="Name">
         <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dadi" />
       </Field>
@@ -3164,11 +3249,7 @@ function MembersModal({ data, onClose, onAdd, onUpdate, onDelete }) {
         </div>
       </Field>
       <Field label="Color tag">
-        <div className="flex flex-wrap gap-2">
-          {COLOR_CHOICES.map((c) => (
-            <button key={c} onClick={() => setColor(c)} className="w-7 h-7 rounded-full border-2" style={{ backgroundColor: c, borderColor: c === color ? "#1e293b" : "transparent" }} />
-          ))}
-        </div>
+        <ColorPicker value={color} onChange={setColor} />
       </Field>
       <label className="flex items-center gap-2 text-sm mb-4">
         <input type="checkbox" checked={isIncomeSource} onChange={(e) => setIsIncomeSource(e.target.checked)} />
