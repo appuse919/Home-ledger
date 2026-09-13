@@ -77,19 +77,20 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import {
+import * as LucideIcons from "lucide-react";
+const {
   Home, Car, Zap, ShoppingBag, HeartPulse, Film, BookOpen, CreditCard, MoreHorizontal,
   UtensilsCrossed, Plus, X, Search, Download, Users, User, TrendingUp, TrendingDown, Wallet,
-  AlertTriangle, Check, Trash2, Calendar, RefreshCw, PiggyBank, Settings as SettingsIcon,
+  AlertTriangle, Check, Trash2, Calendar, RefreshCw, PiggyBank, Settings: SettingsIcon,
   ArrowUpRight, ArrowDownRight, Upload, HandCoins, LayoutGrid, ListTree, Landmark, Repeat, Stamp, Lock, Pencil, ChevronDown,
   LogOut, Mail, KeyRound, UserCheck, Clock, ShieldCheck,
   Plane, Bus, Fuel, GraduationCap, Baby, PawPrint, Smartphone, Wifi, Coffee, Pizza, Dumbbell,
   Stethoscope, Scissors, Shirt, Gamepad2, Music, Briefcase, Wrench, Sparkles, Palette, TreePine,
-  Gift, Bike, Train, ShoppingCart, Pill, Cake, Tv, Camera, Book, Church, Umbrella,
+  Gift, Bike, Train, ShoppingCart, Pill: PillIcon, Cake, Tv, Camera, Book, Church, Umbrella,
   Droplet, Flame, Trash, Hammer, Gem, Glasses, Dog, Cat, Fish,
   Flower2, Sun, Snowflake, Building2, Store, Bed, Lightbulb, Phone, Laptop, Headphones,
   Bookmark, MapPin, Ticket, Popcorn, Wine, Beer, Candy, Salad,
-} from "lucide-react";
+} = LucideIcons;
 import { initializeApp } from "firebase/app";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
@@ -122,7 +123,7 @@ const ICONS = {
   MoreHorizontal, HandCoins, Landmark,
   Plane, Bus, Fuel, GraduationCap, Baby, PawPrint, Smartphone, Wifi, Coffee, Pizza, Dumbbell,
   Stethoscope, Scissors, Shirt, Gamepad2, Music, Briefcase, Wrench, Sparkles, Palette, TreePine,
-  Gift, Bike, Train, ShoppingCart, Pill, Cake, Tv, Camera, Book, Church, Umbrella,
+  Gift, Bike, Train, ShoppingCart, Pill: PillIcon, Cake, Tv, Camera, Book, Church, Umbrella,
   Droplet, Flame, Trash, Hammer, Gem, Glasses, Dog, Cat, Fish,
   Flower2, Sun, Snowflake, Building2, Store, Bed, Lightbulb, Phone, Laptop, Headphones,
   Bookmark, MapPin, Ticket, Popcorn, Wine, Beer, Candy, Salad,
