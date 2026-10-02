@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Bhilare's-Blessed and Abundant</title>
+<title>आयप्रवाह</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   // A palette built for this app specifically — a ledger-navy ink (replacing
@@ -56,7 +56,7 @@
 <meta name="theme-color" content="#1e1b4b" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-title" content="Bhilare's-Blessed and Abundant" />
+<meta name="apple-mobile-web-app-title" content="आयप्रवाह" />
 <style>
   html, body { margin:0; padding:0; background:#f5f5f4; }
 </style>
@@ -129,6 +129,26 @@ const ICONS = {
   Bookmark, MapPin, Ticket, Popcorn, Wine, Beer, Candy, Salad,
 };
 const ICON_CHOICES = Object.keys(ICONS);
+// Every icon in the Lucide library (~1,400), so the picker can search them all without editing code.
+const LUCIDE_NAMES = Object.keys(LucideIcons).filter(
+  (k) => /^[A-Z]/.test(k) && !k.endsWith("Icon") && !k.startsWith("Lucide")
+);
+// Emoji for everyday items Lucide doesn't cover. "emoji:🥛" is what gets saved on a category.
+const EMOJI_LIST = (
+  "🥛 milk dairy doodh dudh|🧈 butter ghee|🧀 cheese paneer|🥚 egg anda|🍞 bread pav bakery|🍚 rice chawal|🌾 wheat atta flour dal grain|" +
+  "🥕 carrot vegetable sabzi|🍅 tomato|🧅 onion kanda|🥔 potato batata|🍌 banana fruit|🍎 apple fruit|🥭 mango|🍇 grapes|🍋 lemon|🥥 coconut|" +
+  "🌶️ chilli masala spice|🧂 salt|🍬 sugar sweet|🍵 tea chai|☕ coffee|🧃 juice|💧 water can bisleri|🥤 cold drink soda|🍪 biscuit cookie snack|" +
+  "🍫 chocolate|🍦 ice cream|🍰 cake|🍕 pizza|🍔 burger|🍟 fries|🍜 noodles|🍛 curry thali meal|🥘 cooking|🍗 chicken meat|🥩 mutton meat|🐟 fish|" +
+  "🛒 grocery cart|🛍️ shopping bag|👕 clothes shirt|👗 dress|👟 shoes footwear|👜 bag purse|💄 makeup beauty|💈 salon haircut|🧴 soap shampoo toiletries|" +
+  "🧹 cleaning broom maid|🧺 laundry washing|🧼 soap detergent|🪥 toothpaste brush|🧻 tissue paper|🗑️ garbage|" +
+  "💡 electricity light bill|🔥 gas cylinder lpg|🚰 water bill|📶 wifi internet|📱 mobile recharge phone|📺 tv dth cable|🔌 plug|" +
+  "🚗 car|🛵 scooter bike|⛽ petrol fuel|🚌 bus|🚆 train|🚕 taxi auto cab uber ola|✈️ flight travel|🅿️ parking|🛣️ toll|" +
+  "💊 medicine pharmacy|🩺 doctor clinic|🏥 hospital|🦷 dentist|👓 glasses|🏋️ gym|🧘 yoga|" +
+  "🎓 school fees education|📚 books|✏️ stationery|🎒 school bag|🏫 college tuition class|" +
+  "🎬 movie|🎮 games|🎵 music|🎉 party|🎁 gift|🎂 birthday|🪔 diwali festival puja|🛕 temple donation|🙏 puja prayer|💍 wedding|" +
+  "🐶 dog pet|🐱 cat pet|🐄 cow|🌱 plants garden|🔧 repair plumber|🔨 hardware|🛠️ service|🏠 home rent|🛋️ furniture|🛏️ bed|" +
+  "💰 savings|🏦 bank loan emi|💳 card|📈 investment sip|🧾 bill|🛡️ insurance|👶 baby kids|🧸 toys|🍼 baby milk"
+).split("|").map((x) => { const i = x.indexOf(" "); return { e: x.slice(0, i), k: x.slice(i + 1).toLowerCase() }; });
 const PLACE_ICONS = { Landmark, Wallet, PiggyBank, TrendingUp, CreditCard, HandCoins, MoreHorizontal };
 const PLACE_ICON_CHOICES = Object.keys(PLACE_ICONS);
 const ALL_ICONS = { ...ICONS, ...PLACE_ICONS };
@@ -273,7 +293,8 @@ function seedData() {
 /* ---------------------------------- small ui bits ---------------------------------- */
 
 function IconBadge({ iconName, color, size = "md" }) {
-  const Icon = ALL_ICONS[iconName] || MoreHorizontal;
+  const isEmoji = typeof iconName === "string" && iconName.startsWith("emoji:");
+  const Icon = ALL_ICONS[iconName] || (LUCIDE_NAMES.includes(iconName) ? LucideIcons[iconName] : null) || MoreHorizontal;
   const dims = size === "sm" ? "w-8 h-8" : size === "lg" ? "w-14 h-14" : "w-10 h-10";
   const iconDims = size === "sm" ? 14 : size === "lg" ? 24 : 18;
   return (
@@ -281,7 +302,7 @@ function IconBadge({ iconName, color, size = "md" }) {
       className={`${dims} rounded-full flex items-center justify-center border-2 border-dashed shrink-0`}
       style={{ backgroundColor: `${color}1a`, borderColor: color, color }}
     >
-      <Icon size={iconDims} strokeWidth={2} />
+      {isEmoji ? <span style={{ fontSize: iconDims, lineHeight: 1 }}>{iconName.slice(6)}</span> : <Icon size={iconDims} strokeWidth={2} />}
     </div>
   );
 }
@@ -405,10 +426,37 @@ function ColorPicker({ value, onChange }) {
   );
 }
 
+function IconPicker({ value, color, onChange }) {
+  const [q, setQ] = useState("");
+  const s = q.trim().toLowerCase();
+  const emojis = useMemo(() => (s ? EMOJI_LIST.filter((x) => x.k.includes(s)) : EMOJI_LIST.slice(0, 18)), [s]);
+  const icons = useMemo(
+    () => (s ? LUCIDE_NAMES.filter((n) => n.toLowerCase().includes(s.replace(/\s+/g, ""))).slice(0, 40) : ICON_CHOICES),
+    [s]
+  );
+  const pick = (v) => (
+    <button key={v} type="button" onClick={() => onChange(v)} className={value === v ? "ring-2 ring-amber-500 rounded-full" : ""}>
+      <IconBadge iconName={v} color={color} size="sm" />
+    </button>
+  );
+  return (
+    <div>
+      <input className={inputCls + " mb-2"} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search icons: milk, petrol, school, gas..." />
+      {emojis.length > 0 && <div className="flex flex-wrap gap-2 mb-2">{emojis.map((x) => pick("emoji:" + x.e))}</div>}
+      <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">{icons.map((n) => pick(n))}</div>
+      {s && emojis.length === 0 && icons.length === 0 && <div className="text-xs text-stone-500">No match. Try another word, or type any emoji below.</div>}
+      <label className="flex items-center gap-2 text-xs text-stone-500 mt-2">
+        Or type any emoji:
+        <input className={inputCls + " !w-16 text-center"} maxLength={8} placeholder="🥛" onChange={(e) => e.target.value.trim() && onChange("emoji:" + e.target.value.trim())} />
+      </label>
+    </div>
+  );
+}
+
 /* ---------------------------------- language / translations ---------------------------------- */
 
 const TRANSLATIONS = {
-  appName: { en: "Bhilare's-Blessed and Abundant", mr: "घर हिशोब" },
+  appName: { en: "आयप्रवाह", mr: "आयप्रवाह" },
   tagline: { en: "Shared family ledger", mr: "कुटुंबाचा हिशोब" },
   loading: { en: "Loading your ledger...", mr: "हिशोब लोड होत आहे..." },
   saveFailed: { en: "Couldn't save — check your connection.", mr: "सेव्ह होऊ शकले नाही — कनेक्शन तपासा." },
@@ -494,10 +542,8 @@ function AuthScreen() {
     <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-2 mb-6">
-          <div className="w-14 h-14 rounded-full bg-indigo-950 flex items-center justify-center text-amber-400">
-            <Stamp size={26} />
-          </div>
-          <h1 className="font-serif text-xl text-center leading-tight text-indigo-950">Bhilare's-Blessed and Abundant</h1>
+          <img src="icon-192.png" alt="आयप्रवाह" className="w-20 h-20 rounded-full" />
+          <h1 className="font-serif text-xl text-center leading-tight text-indigo-950">आयप्रवाह</h1>
           <p className="text-xs text-stone-500">Shared family ledger</p>
         </div>
         <Card className="p-5">
@@ -688,6 +734,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
   const [lang, setLang] = useState("en");
   const t = (key) => TRANSLATIONS[key]?.[lang] || TRANSLATIONS[key]?.en || key;
   const [showAddTx, setShowAddTx] = useState(null);
+  const [showImport, setShowImport] = useState(false);
   const [editTx, setEditTx] = useState(null);
   const [showMembers, setShowMembers] = useState(false);
   const [showRecurringModal, setShowRecurringModal] = useState(false);
@@ -755,6 +802,10 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
       allowances = allowances.map((a) => (a.id === newTx.allowanceId ? { ...a, balance: (a.balance || 0) - newTx.amount } : a));
     }
     persist({ ...data, transactions: [newTx, ...data.transactions], places, allowances });
+  };
+  const importTransactions = (txs, rules) => {
+    persist({ ...data, transactions: [...txs.map((x) => ({ id: uid("t"), ...x })), ...data.transactions], merchantRules: { ...(data.merchantRules || {}), ...rules } });
+    setShowImport(false);
   };
   // Adds an expense and, optionally, a family IOU debt (member B owes member A)
   // in a single save so both land together.
@@ -1369,15 +1420,25 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
           >
             <ArrowDownRight size={16} /> Expense
           </button>
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-1.5 bg-indigo-950 text-amber-50 px-4 py-2.5 rounded-full shadow-lg text-sm font-semibold"
+          >
+            <UploadIcon size={16} /> Import statement
+          </button>
         </div>
       )}
 
       {/* modals */}
+      {showImport && (
+        <ImportStatementModal data={data} defaultMemberId={viewMode !== "family" ? viewMode : data.members[0]?.id} onClose={() => setShowImport(false)} onImport={importTransactions} onAddCategory={addCategory} />
+      )}
       {(showAddTx || editTx) && (
         <AddTransactionModal
           type={editTx ? editTx.type : showAddTx}
           editingTx={editTx}
           data={data}
+          defaultCategoryId={tab === "transactions" && filters.category !== "all" ? filters.category : null}
           incomeMembers={incomeMembers}
           onClose={() => { setShowAddTx(null); setEditTx(null); }}
           onSave={(tx, loan) => {
@@ -2594,13 +2655,7 @@ function NewCategoryForm({ onSave, compact, editing = null, existingCount = 0 })
         <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pet care" />
       </Field>
       <Field label="Icon">
-        <div className="flex flex-wrap gap-2">
-          {ICON_CHOICES.map((ic) => (
-            <button key={ic} onClick={() => setIcon(ic)} className={icon === ic ? "ring-2 ring-amber-500 rounded-full" : ""}>
-              <IconBadge iconName={ic} color={color} size="sm" />
-            </button>
-          ))}
-        </div>
+        <IconPicker value={icon} color={color} onChange={setIcon} />
       </Field>
       <Field label="Color">
         <ColorPicker value={color} onChange={setColor} />
@@ -2616,6 +2671,242 @@ function NewCategoryForm({ onSave, compact, editing = null, existingCount = 0 })
         {editing ? "Save changes" : compact ? "Add category" : "Save category"}
       </button>
     </div>
+  );
+}
+
+/* ------------------------- Statement import (CSV) ------------------------- */
+const UploadIcon = LucideIcons.Upload || LucideIcons.FileUp;
+const STARTER_RULES = [
+  [/zepto|bigbasket|blinkit|grofers|dmart|d mart|jiomart|instamart|reliance fresh|reliance smart|more retail|milk|dairy|amul|kirana|provision|vegetable|sabzi|bakery|supermarket|swiggy|zomato|restaurant|\bcafe\b|dominos|pizza|mcdonald|\bkfc\b|burger|starbucks|biryani|hotel/, /food|grocer|dining/],
+  [/\buber\b|\bola\b|rapido|irctc|redbus|metro|railway|petrol|fuel|hpcl|bpcl|iocl|indian oil|fastag|\btoll|parking|makemytrip|indigo|air india|\bcab\b/, /travel|transport|vehicle|fuel/],
+  [/electricity|msedcl|adani elec|tata power|mahanagar gas|\bmgl\b|\bgas\b|broadband|airtel|\bjio\b|vodafone|recharge|bsnl|water bill|\bdth\b|tata play|fibernet/, /utilit|bill|electric|phone|recharge/],
+  [/amazon|flipkart|myntra|ajio|meesho|nykaa|lifestyle|pantaloons|westside|max fashion|decathlon|croma|vijay sales/, /shop|cloth|fashion/],
+  [/pharm|apollo|medplus|netmeds|1mg|hospital|clinic|diagnostic|dental|doctor|medical/, /health|medic/],
+  [/netflix|hotstar|prime video|spotify|bookmyshow|\bpvr\b|\binox\b|youtube|sony liv|zee5|gaming/, /entertain|movie|fun/],
+  [/school|college|tuition|\bfees?\b|byju|unacademy|udemy|coaching|exam|stationery|\bbooks?\b/, /educat|school|study/],
+  [/\brent\b|maintenance|society|housing|property tax|plumber|electrician|repair/, /rent|hous|home/],
+];
+const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+
+function parseCSV(text) {
+  const sample = text.slice(0, 3000);
+  const delim = [",", "\t", ";"].sort((a, b) => sample.split(b).length - sample.split(a).length)[0];
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.map((r) => r.map((x) => x.trim())).filter((r) => r.some((x) => x));
+}
+
+function parseStmtDate(v) {
+  const m = String(v || "").trim().match(/^(\d{1,4})[\/\-. ]([A-Za-z]{3,9}|\d{1,2})[\/\-. ](\d{2,4})/);
+  if (!m) return null;
+  let d, mo, y;
+  if (m[1].length === 4) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else { d = +m[1]; mo = isNaN(+m[2]) ? MON[m[2].slice(0, 3).toLowerCase()] : +m[2]; y = +m[3]; if (y < 100) y += 2000; }
+  if (!mo || mo > 12 || d < 1 || d > 31) return null;
+  return y + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+}
+
+const stmtNum = (v) => { const n = parseFloat(String(v || "").replace(/[₹,\sA-Za-z]/g, "")); return isNaN(n) ? 0 : Math.abs(n); };
+
+// Strip UPI/bank noise so the merchant name is what's left.
+function cleanDesc(d) {
+  return String(d || "")
+    .replace(/\b(UPI|IMPS|NEFT|RTGS|POS|ATM|ACH|ECS|NACH|BIL|TPT|MB|IB|DR|CR|okaxis|okhdfcbank|oksbi|okicici|ybl|ibl|axl|apl)\b/gi, " ")
+    .replace(/\b[A-Z]{4}0[A-Z0-9]{6}\b/g, " ")
+    .replace(/\b\d*x{2,}\d*\b/gi, " ")
+    .replace(/\b\d{5,}\b/g, " ")
+    .replace(/[@\/\-_:*]+/g, " ")
+    .replace(/\s+/g, " ").trim();
+}
+
+function readStatement(text) {
+  const rows = parseCSV(text);
+  const hi = rows.findIndex((r) => r.some((c) => /date/i.test(c)) && r.some((c) => /narration|description|particulars|details|remarks/i.test(c)) && r.some((c) => /withdraw|debit|amount|^dr$/i.test(c)));
+  if (hi < 0) return { error: "I couldn't find the date, description and amount columns. Please upload the CSV statement from your bank." };
+  const h = rows[hi].map((c) => c.toLowerCase());
+  const iType = h.findIndex((c) => /dr\/cr|cr\/dr|debit\/credit|^type$|txn type/.test(c));
+  const iDr = h.findIndex((c, i) => i !== iType && /withdraw|debit|^dr$/.test(c));
+  const iCr = h.findIndex((c, i) => i !== iType && /deposit|credit|^cr$/.test(c));
+  const iAmt = h.findIndex((c, i) => i !== iType && i !== iDr && i !== iCr && /amount/.test(c));
+  let iDate = h.findIndex((c) => /date/.test(c) && !/value/.test(c));
+  if (iDate < 0) iDate = h.findIndex((c) => /date/.test(c));
+  const iDesc = h.findIndex((c) => /narration|description|particulars|details|remarks/.test(c));
+  const body = rows.slice(hi + 1);
+  const anyNeg = iAmt >= 0 && body.some((r) => /^-|\(/.test(String(r[iAmt] || "")));
+  const out = []; let credits = 0;
+  for (const r of body) {
+    const date = parseStmtDate(r[iDate]);
+    if (!date) continue;
+    let debit = 0, credit = 0;
+    if (iDr >= 0 || iCr >= 0) { debit = iDr >= 0 ? stmtNum(r[iDr]) : 0; credit = iCr >= 0 ? stmtNum(r[iCr]) : 0; }
+    else if (iAmt >= 0) {
+      const raw = String(r[iAmt] || ""), a = stmtNum(raw);
+      const isCr = iType >= 0 ? /^c/i.test(r[iType] || "") : /cr/i.test(raw) || (anyNeg && !/^-|\(/.test(raw));
+      if (isCr) credit = a; else debit = a;
+    }
+    if (debit > 0) {
+      const desc = r[iDesc] || "", clean = cleanDesc(desc);
+      out.push({ date, desc, clean, key: clean.toLowerCase().split(" ").slice(0, 2).join(" "), amount: debit });
+    } else if (credit > 0) credits++;
+  }
+  if (!out.length) return { error: "No expense rows found in that file." };
+  return { rows: out, credits };
+}
+
+function guessCategory(clean, cats, rules) {
+  const d = clean.toLowerCase();
+  for (const k of Object.keys(rules).sort((a, b) => b.length - a.length)) if (d.includes(k) && cats.some((c) => c.id === rules[k])) return rules[k];
+  for (const c of cats) {
+    const w = c.name.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length >= 4 && x !== "other");
+    if (w.some((x) => new RegExp("\\b" + x + "\\b").test(d))) return c.id;
+  }
+  for (const [kw, hint] of STARTER_RULES) if (kw.test(d)) { const c = cats.find((c) => hint.test(c.name.toLowerCase())); if (c) return c.id; }
+  return null;
+}
+
+function ImportStatementModal({ data, defaultMemberId, onClose, onImport, onAddCategory }) {
+  const cats = data.categories.filter((c) => !c.isSystem);
+  const otherId = (cats.find((c) => c.id === "other") || cats.find((c) => /^other/i.test(c.name)) || cats[cats.length - 1])?.id;
+  const catName = (id) => cats.find((c) => c.id === id)?.name || "Other";
+  const [memberId, setMemberId] = useState(defaultMemberId || data.members[0]?.id);
+  const [rows, setRows] = useState(null);
+  const [credits, setCredits] = useState(0);
+  const [err, setErr] = useState("");
+  const [newCatFor, setNewCatFor] = useState(null); // { i, j } j = -1 main category, else split index
+
+  async function onFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErr("");
+    if (/\.xlsx?$/i.test(file.name)) { setErr("Excel files can't be read yet. In Excel use Save As → CSV, then upload that file."); return; }
+    try {
+      const res = readStatement(await file.text());
+      if (res.error) { setErr(res.error); return; }
+      const seen = new Set(data.transactions.filter((t) => t.type === "expense").map((t) => t.date + "|" + t.amount));
+      setCredits(res.credits);
+      setRows(res.rows.map((r, i) => {
+        const dup = seen.has(r.date + "|" + r.amount);
+        return { ...r, i, key: r.key || "row" + i, catId: guessCategory(r.clean, cats, data.merchantRules || {}) || otherId, splits: [], dup, on: !dup };
+      }));
+    } catch (x) { setErr("Couldn't read that file. Please upload a CSV."); }
+  }
+
+  const upd = (i, patch) => setRows((rs) => rs.map((x) => (x.i === i ? { ...x, ...patch } : x)));
+  const setPartCat = (r, j, v) => {
+    if (v === "__new") { setNewCatFor({ i: r.i, j }); return; }
+    if (j < 0) upd(r.i, { catId: v }); else upd(r.i, { splits: r.splits.map((sp, k) => (k === j ? { ...sp, catId: v } : sp)) });
+  };
+  const setPartAmt = (r, j, v) => upd(r.i, { splits: r.splits.map((sp, k) => (k === j ? { ...sp, amount: v } : sp)) });
+  const addPart = (r) => upd(r.i, { splits: [...r.splits, { catId: cats.find((c) => c.id !== r.catId)?.id || otherId, amount: "" }] });
+  const delPart = (r, j) => upd(r.i, { splits: r.splits.filter((_, k) => k !== j) });
+  const remaining = (r) => Math.round((r.amount - r.splits.reduce((t, sp) => t + (Number(sp.amount) || 0), 0)) * 100) / 100;
+  function saveNewCat(vals) {
+    const c = onAddCategory(vals);
+    const r = rows.find((x) => x.i === newCatFor.i);
+    if (r) setPartCat(r, newCatFor.j, c.id);
+    setNewCatFor(null);
+  }
+
+  const chosen = rows ? rows.filter((r) => r.on) : [];
+  const total = chosen.reduce((t, r) => t + r.amount, 0);
+  const otherCount = chosen.filter((r) => r.catId === otherId).length;
+  const hasError = chosen.some((r) => remaining(r) < 0);
+
+  function doImport() {
+    const rules = {}, byKey = {};
+    chosen.filter((r) => !r.splits.length).forEach((r) => { (byKey[r.key] = byKey[r.key] || new Set()).add(r.catId); });
+    Object.entries(byKey).forEach(([k, set]) => { const c = [...set][0]; if (set.size === 1 && c !== otherId && k.length >= 3 && !k.startsWith("row")) rules[k] = c; });
+    const txs = [];
+    chosen.forEach((r) => {
+      const base = (r.clean || r.desc).slice(0, 50);
+      const parts = r.splits.filter((sp) => Number(sp.amount) > 0).map((sp) => ({ catId: sp.catId, amount: Number(sp.amount) }));
+      const rem = remaining(r);
+      if (rem > 0) parts.unshift({ catId: r.catId, amount: rem });
+      parts.forEach((pt) => txs.push({
+        type: "expense", amount: pt.amount, memberId, categoryId: pt.catId, date: r.date,
+        note: parts.length > 1 ? base + " · " + catName(pt.catId) : base,
+        paidFrom: [{ memberId, amount: pt.amount }], recurringId: null, debtId: null,
+      }));
+    });
+    onImport(txs, rules);
+  }
+
+  const catOptions = (<>
+    {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+    <option value="__new">+ New category…</option>
+  </>);
+
+  return (
+    <Modal title="Import bank statement" onClose={onClose} wide>
+      {!rows ? (
+        <div>
+          <p className="text-sm text-stone-600 mb-3">Upload your bank or UPI statement as a <b>CSV</b> file. Each expense is put in the matching category; anything not understood goes to <b>Other</b>. You can change any category or <b>split</b> an expense before importing.</p>
+          <Field label="Whose expenses are these?">
+            <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+              {data.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </Field>
+          <input type="file" accept=".csv,.tsv,.txt,text/csv" onChange={onFile} className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-950 file:text-amber-50 file:px-4 file:py-2.5 file:font-semibold" />
+          {err && <div className="mt-3 text-sm text-rose-700 bg-rose-50 rounded-lg p-3">{err}</div>}
+        </div>
+      ) : (
+        <div>
+          <div className="text-xs text-stone-500 mb-2">{rows.length} expenses found{credits ? ` · ${credits} credits skipped` : ""}{rows.some((r) => r.dup) ? " · possible duplicates are unticked" : ""}. Changing a category changes only that expense.</div>
+          <div className="max-h-[50vh] overflow-y-auto border border-stone-200 rounded-xl bg-white divide-y divide-stone-100">
+            {rows.map((r) => (
+              <div key={r.i} className={"p-2.5 flex gap-2 items-start " + (r.on ? "" : "opacity-50")}>
+                <input type="checkbox" className="mt-1" checked={r.on} onChange={() => upd(r.i, { on: !r.on })} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="truncate font-medium text-stone-800">{r.clean || r.desc}</span>
+                    <span className="font-semibold shrink-0">₹{r.amount.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[11px] text-stone-500 shrink-0">{r.date}{r.dup ? " · maybe added" : ""}</span>
+                    <select value={r.catId} onChange={(e) => setPartCat(r, -1, e.target.value)}
+                      className={"flex-1 min-w-0 text-xs rounded-md border px-1.5 py-1 bg-white " + (r.catId === otherId ? "border-amber-400 text-amber-800" : "border-stone-300")}>
+                      {catOptions}
+                    </select>
+                  </div>
+                  {r.splits.map((sp, j) => (
+                    <div key={j} className="flex items-center gap-1.5 mt-1.5 pl-3 border-l-2 border-amber-300">
+                      <select value={sp.catId} onChange={(e) => setPartCat(r, j, e.target.value)} className="flex-1 min-w-0 text-xs rounded-md border border-stone-300 px-1.5 py-1 bg-white">{catOptions}</select>
+                      <input type="number" inputMode="decimal" placeholder="₹" value={sp.amount} onChange={(e) => setPartAmt(r, j, e.target.value)} className="w-20 text-xs rounded-md border border-stone-300 px-1.5 py-1" />
+                      <button type="button" onClick={() => delPart(r, j)} className="text-stone-400 px-1">✕</button>
+                    </div>
+                  ))}
+                  {r.splits.length > 0 && (
+                    <div className={"text-[11px] mt-1 pl-3 " + (remaining(r) < 0 ? "text-rose-700 font-semibold" : "text-stone-500")}>
+                      {remaining(r) < 0 ? "Split amounts are more than ₹" + r.amount : "Remaining ₹" + remaining(r).toLocaleString("en-IN") + " stays in " + catName(r.catId)}
+                    </div>
+                  )}
+                  <button type="button" onClick={() => addPart(r)} className="text-[11px] text-indigo-700 underline mt-1">
+                    {r.splits.length ? "+ Split more" : "Split this expense"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {otherCount > 0 && <div className="text-xs text-amber-800 mt-2">{otherCount} selected rows are in "Other". Change them above if you like.</div>}
+          <button disabled={!chosen.length || hasError} onClick={doImport} className="w-full mt-3 bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40">
+            Import {chosen.length} expenses · ₹{total.toLocaleString("en-IN")}
+          </button>
+        </div>
+      )}
+      {newCatFor && (
+        <Modal title="New category" onClose={() => setNewCatFor(null)}>
+          <NewCategoryForm existingCount={data.categories.length} onSave={saveNewCat} compact />
+        </Modal>
+      )}
+    </Modal>
   );
 }
 
@@ -3269,7 +3560,7 @@ function MembersModal({ data, onClose, onAdd, onUpdate, onDelete }) {
 
 /* ---------------------------------- Add Transaction Modal ---------------------------------- */
 
-function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, onSave, onUpdate, onAddCategory }) {
+function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeMembers, onClose, onSave, onUpdate, onAddCategory }) {
   const editing = editingTx || null;
   // Anyone can be the actual payer (even without regular income, e.g. paying from savings) —
   // so "Paid from whose money" draws from every family member, not just income sources.
@@ -3290,7 +3581,7 @@ function AddTransactionModal({ type, editingTx, data, incomeMembers, onClose, on
   })();
 
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
-  const [categoryId, setCategoryId] = useState(editing?.categoryId || data.categories.find((c) => !c.isSystem)?.id || "");
+  const [categoryId, setCategoryId] = useState(editing?.categoryId || (data.categories.some((c) => c.id === defaultCategoryId) ? defaultCategoryId : null) || data.categories.find((c) => !c.isSystem)?.id || "");
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [categories, setCategories] = useState(data.categories);
 
