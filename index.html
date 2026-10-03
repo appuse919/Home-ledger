@@ -299,8 +299,8 @@ function IconBadge({ iconName, color, size = "md" }) {
   const iconDims = size === "sm" ? 14 : size === "lg" ? 24 : 18;
   return (
     <div
-      className={`${dims} rounded-full flex items-center justify-center border-2 border-dashed shrink-0`}
-      style={{ backgroundColor: `${color}1a`, borderColor: color, color }}
+      className={`${dims} rounded-xl flex items-center justify-center shrink-0`}
+      style={{ backgroundColor: `${color}1f`, color }}
     >
       {isEmoji ? <span style={{ fontSize: iconDims, lineHeight: 1 }}>{iconName.slice(6)}</span> : <Icon size={iconDims} strokeWidth={2} />}
     </div>
@@ -358,7 +358,7 @@ function Modal({ title, onClose, children, wide }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-900/50 p-0 sm:p-4">
       <div className={`bg-stone-50 w-full ${wide ? "sm:max-w-lg" : "sm:max-w-md"} sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 sticky top-0 bg-stone-50 z-10">
-          <h3 className="font-serif text-lg text-indigo-950">{title}</h3>
+          <h3 className="text-lg font-semibold tracking-tight text-indigo-950">{title}</h3>
           <button onClick={onClose} className="p-1.5 rounded-full hover:bg-stone-200 text-stone-500">
             <X size={18} />
           </button>
@@ -380,75 +380,93 @@ function Field({ label, children }) {
 
 const inputCls = "w-full px-3 py-2.5 rounded-lg border border-stone-300 bg-white text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm";
 
+const PALETTE = ["#4338ca", "#2563eb", "#0284c7", "#0d9488", "#059669", "#65a30d", "#d97706", "#ea580c", "#e11d48", "#db2777", "#9333ea", "#475569"];
+
 function ColorPicker({ value, onChange }) {
+  const same = (c) => String(c).toLowerCase() === String(value).toLowerCase();
+  const isCustom = !PALETTE.some(same);
   return (
-    <div>
-      <div
-        className="grid gap-1 mb-2.5 overflow-x-auto pb-1"
-        style={{
-          gridTemplateColumns: `repeat(${BASE_HUES.length}, minmax(18px, 1fr))`,
-          gridTemplateRows: `repeat(${COLOR_SHADE_GRID[0].length}, minmax(0, 1fr))`,
-          gridAutoFlow: "column",
-        }}
-      >
-        {COLOR_SHADE_GRID.map((column, colIdx) =>
-          column.map((c, rowIdx) => (
-            <button
-              key={`${colIdx}-${rowIdx}`}
-              type="button"
-              onClick={() => onChange(c)}
-              className="aspect-square w-full rounded-sm"
-              style={{
-                backgroundColor: c,
-                outline: c.toLowerCase() === value.toLowerCase() ? "2px solid #1e293b" : "1px solid rgba(0,0,0,0.08)",
-                outlineOffset: c.toLowerCase() === value.toLowerCase() ? "1px" : "0",
-              }}
-              title={c}
-            />
-          ))
-        )}
-      </div>
-      <label className="flex items-center gap-2 text-xs text-stone-500">
-        <span
-          className="w-7 h-7 rounded-full border-2 flex-shrink-0 relative overflow-hidden"
-          style={{ backgroundColor: value, borderColor: "#1e293b" }}
-        >
-          <input
-            type="color"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          />
-        </span>
-        Or pick any custom color
+    <div className="flex flex-wrap gap-2.5 items-center">
+      {PALETTE.map((c) => (
+        <button key={c} type="button" onClick={() => onChange(c)} title={c}
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
+          style={{ backgroundColor: c, boxShadow: same(c) ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : "none" }}>
+          {same(c) && <Check size={14} className="text-white" strokeWidth={3} />}
+        </button>
+      ))}
+      <label title="Custom colour" className="relative w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden border border-dashed border-stone-400 text-stone-500"
+        style={isCustom ? { backgroundColor: value, border: "none", boxShadow: `0 0 0 2px #fff, 0 0 0 4px ${value}` } : undefined}>
+        {isCustom ? <Check size={14} className="text-white" strokeWidth={3} /> : <Plus size={14} />}
+        <input type="color" value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#4338ca"} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
       </label>
     </div>
   );
 }
 
+const ICON_GROUPS = {
+  Food: "Milk Egg Apple Banana Carrot Beef Fish Wheat Sandwich Soup Pizza Coffee Wine Beer Cookie IceCream Croissant Cherry Grape Citrus Salad Popcorn Candy Cake Utensils UtensilsCrossed CookingPot ChefHat Drumstick Nut Ham Vegan GlassWater CupSoda",
+  Home: "Home Building2 Hammer Wrench PaintBucket Sofa Bed Bath Lamp Lightbulb Zap Droplets Flame Wifi Plug Fan Key DoorOpen Trash2 SprayCan ShowerHead Armchair Refrigerator WashingMachine Microwave",
+  Transport: "Car Bus Bike Train Plane Fuel ParkingCircle Ship Truck CarTaxiFront Route MapPin Navigation TramFront Ticket Luggage Compass",
+  Health: "Stethoscope Pill HeartPulse Syringe Hospital Dumbbell Activity Thermometer Bandage Eye Glasses Smile Brain Baby Bone Ambulance",
+  Shopping: "ShoppingCart ShoppingBag Shirt Gem Watch Footprints Store Tag Gift Package Scissors Sparkles Crown Umbrella Backpack Smartphone Laptop Headphones Camera Tv",
+  Family: "GraduationCap BookOpen School Pencil Library Users Heart HandHeart PawPrint Dog Cat Flower2 Church Landmark Calculator Notebook Languages",
+  Fun: "Music Film Gamepad2 Ticket PartyPopper Mountain Tent Trophy Dices Clapperboard Popcorn Drama TreePalm Plane Cake",
+  Money: "Wallet PiggyBank CreditCard Receipt Banknote Coins Landmark TrendingUp ShieldCheck HandCoins Percent FileText IndianRupee Briefcase CircleDollarSign Scale Gavel Building",
+};
+// Only icons that really exist in the loaded Lucide version are shown.
+const ICON_GROUP_LIST = [...Object.entries(ICON_GROUPS).map(([g, v]) => [g, [...new Set(v.split(" "))]]), ["Basic", ICON_CHOICES]]
+  .map(([g, names]) => [g, names.filter((n) => ALL_ICONS[n] || LUCIDE_NAMES.includes(n))]);
+
+function Glyph({ name, size = 18 }) {
+  if (typeof name === "string" && name.startsWith("emoji:")) return <span style={{ fontSize: size, lineHeight: 1 }}>{name.slice(6)}</span>;
+  const Icon = ALL_ICONS[name] || (LUCIDE_NAMES.includes(name) ? LucideIcons[name] : null) || MoreHorizontal;
+  return <Icon size={size} strokeWidth={1.75} />;
+}
+
 function IconPicker({ value, color, onChange }) {
   const [q, setQ] = useState("");
+  const [mode, setMode] = useState(String(value).startsWith("emoji:") ? "emoji" : "icons");
+  const [group, setGroup] = useState(0);
   const s = q.trim().toLowerCase();
-  const emojis = useMemo(() => (s ? EMOJI_LIST.filter((x) => x.k.includes(s)) : EMOJI_LIST.slice(0, 18)), [s]);
-  const icons = useMemo(
-    () => (s ? LUCIDE_NAMES.filter((n) => n.toLowerCase().includes(s.replace(/\s+/g, ""))).slice(0, 40) : ICON_CHOICES),
-    [s]
-  );
-  const pick = (v) => (
-    <button key={v} type="button" onClick={() => onChange(v)} className={value === v ? "ring-2 ring-amber-500 rounded-full" : ""}>
-      <IconBadge iconName={v} color={color} size="sm" />
-    </button>
-  );
+  let items;
+  if (mode === "emoji") items = (s ? EMOJI_LIST.filter((x) => x.k.includes(s)) : EMOJI_LIST).map((x) => "emoji:" + x.e);
+  else items = s ? LUCIDE_NAMES.filter((n) => n.toLowerCase().includes(s.replace(/\s+/g, ""))).slice(0, 60) : ICON_GROUP_LIST[group][1];
   return (
     <div>
-      <input className={inputCls + " mb-2"} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search icons: milk, petrol, school, gas..." />
-      {emojis.length > 0 && <div className="flex flex-wrap gap-2 mb-2">{emojis.map((x) => pick("emoji:" + x.e))}</div>}
-      <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">{icons.map((n) => pick(n))}</div>
-      {s && emojis.length === 0 && icons.length === 0 && <div className="text-xs text-stone-500">No match. Try another word, or type any emoji below.</div>}
-      <label className="flex items-center gap-2 text-xs text-stone-500 mt-2">
-        Or type any emoji:
-        <input className={inputCls + " !w-16 text-center"} maxLength={8} placeholder="🥛" onChange={(e) => e.target.value.trim() && onChange("emoji:" + e.target.value.trim())} />
-      </label>
+      <div className="flex gap-1 p-1 bg-stone-100 rounded-lg mb-2.5">
+        {[["icons", "Icons"], ["emoji", "Emoji"]].map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setMode(k)}
+            className={"flex-1 text-xs font-semibold py-1.5 rounded-md transition " + (mode === k ? "bg-white text-indigo-950 shadow-sm" : "text-stone-500")}>{label}</button>
+        ))}
+      </div>
+      <input className={inputCls + " mb-2.5"} value={q} onChange={(e) => setQ(e.target.value)} placeholder={mode === "emoji" ? "Search emoji: milk, petrol, school…" : "Search all icons: milk, car, doctor…"} />
+      {mode === "icons" && !s && (
+        <div className="flex gap-1.5 overflow-x-auto pb-2 mb-1">
+          {ICON_GROUP_LIST.map(([g], i) => (
+            <button key={g} type="button" onClick={() => setGroup(i)}
+              className={"shrink-0 text-xs font-medium px-3 py-1 rounded-full border transition " + (group === i ? "bg-indigo-950 text-amber-50 border-indigo-950" : "bg-white text-stone-600 border-stone-300")}>{g}</button>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
+        {items.map((v) => {
+          const sel = value === v;
+          return (
+            <button key={v} type="button" onClick={() => onChange(v)} title={v.replace("emoji:", "")}
+              className={"h-10 rounded-lg flex items-center justify-center border transition " + (sel ? "bg-white" : "bg-stone-50 border-transparent hover:bg-stone-100")}
+              style={sel ? { borderColor: color, boxShadow: `0 0 0 1px ${color}`, color } : { color: "#57534e" }}>
+              <Glyph name={v} size={19} />
+            </button>
+          );
+        })}
+      </div>
+      {items.length === 0 && <div className="text-xs text-stone-500 py-2">No match. Try another word.</div>}
+      {mode === "emoji" && (
+        <label className="flex items-center gap-2 text-xs text-stone-500 mt-2.5">
+          Or paste any emoji
+          <input className={inputCls + " !w-16 text-center"} maxLength={8} placeholder="🥛" onChange={(e) => e.target.value.trim() && onChange("emoji:" + e.target.value.trim())} />
+        </label>
+      )}
     </div>
   );
 }
@@ -745,7 +763,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
   const [incomeFilters, setIncomeFilters] = useState({ q: "", category: "all", member: "all", from: "", to: "" });
 
   const goToCategory = (categoryId) => {
-    setFilters({ q: "", category: categoryId, member: "all", from: "", to: "" });
+    setFilters({ q: "", category: categoryId, member: viewMode === "family" ? "all" : viewMode, from: "", to: "" });
     setTab("transactions");
   };
 
@@ -779,7 +797,25 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, viewMode]);
 
-  async function persist(next) {
+  // Tapping a person at the top filters the Transactions and Income lists to that person.
+  useEffect(() => {
+    const m = viewMode === "family" ? "all" : viewMode;
+    setFilters((f) => ({ ...f, member: m }));
+    setIncomeFilters((f) => ({ ...f, member: m }));
+  }, [viewMode]);
+
+  async function persist(rawNext) {
+    // Record when each entry was added / last modified, and when the ledger last changed.
+    const now = new Date().toISOString();
+    const prev = new Map(((data && data.transactions) || []).map((t) => [t.id, t]));
+    const next = { ...rawNext, lastModified: now };
+    if (rawNext.transactions) {
+      next.transactions = rawNext.transactions.map((t) => {
+        const old = prev.get(t.id);
+        if (!old) return t.createdAt ? t : { ...t, createdAt: now, updatedAt: now };
+        return old === t ? t : { ...t, updatedAt: now };
+      });
+    }
     setData(next);
     try {
       await setDoc(ledgerRef, next);
@@ -1097,7 +1133,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
     return data.transactions
       .filter((t) => (typeWanted ? t.type === typeWanted : true))
       .filter((t) => (f.category === "all" ? true : t.categoryId === f.category))
-      .filter((t) => (f.member === "all" ? true : t.memberId === f.member || (t.paidFrom || []).some((p) => p.memberId === f.member)))
+      .filter((t) => (f.member === "all" ? true : t.memberId === f.member))
       .filter((t) => (f.from ? t.date >= f.from : true))
       .filter((t) => (f.to ? t.date <= f.to : true))
       .filter((t) => {
@@ -1120,12 +1156,12 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
   }
 
   function exportCSV() {
-    const rows = [["Date", "Type", "Amount", "Category", "Spent By", "Paid From", "Note"]];
+    const rows = [["Date", "Type", "Amount", "Category", "Spent By", "Paid From", "Note", "Added On", "Last Modified"]];
     data.transactions.forEach((t) => {
       const cat = data.categories.find((c) => c.id === t.categoryId)?.name || "";
       const member = data.members.find((m) => m.id === t.memberId)?.name || "";
       const paid = (t.paidFrom || []).map((p) => `${data.members.find((m) => m.id === p.memberId)?.name || "?"}:${p.amount}`).join(" | ");
-      rows.push([t.date, t.type, t.amount, cat, member, paid, t.note || ""]);
+      rows.push([t.date, t.type, t.amount, cat, member, paid, t.note || "", fmtStamp(t.createdAt), fmtStamp(t.updatedAt)]);
     });
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     downloadBlob(csv, "home-ledger-transactions.csv", "text/csv");
@@ -1289,6 +1325,7 @@ function Ledger({ user, isOwner, requests, allowlist, onApprove, onDeny, onSignO
             onAddTx={(type) => setShowAddTx(type)}
             onCategoryClick={goToCategory}
             onUpdateMember={updateMember}
+            onViewAll={() => setTab("transactions")}
           />
         )}
 
@@ -1596,7 +1633,7 @@ function TrendTooltip({ active, payload }) {
   );
 }
 
-function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, memberIncomeThisMonth, memberFundedThisMonth, memberSpentThisMonth, memberCategoryBreakdown, memberOwnTransactions, categoryPie, monthlyTrend, yearlyTrend, dailyThisMonth, categorySpendThisMonth, onAddTx, onCategoryClick, onUpdateMember }) {
+function Dashboard({ onViewAll, data, viewMode, selectedMember, familyTotals, netWorth, memberIncomeThisMonth, memberFundedThisMonth, memberSpentThisMonth, memberCategoryBreakdown, memberOwnTransactions, categoryPie, monthlyTrend, yearlyTrend, dailyThisMonth, categorySpendThisMonth, onAddTx, onCategoryClick, onUpdateMember }) {
   const [trendView, setTrendView] = useState("monthly");
   const overallBudget = data.settings.overallBudget || 0;
   const overallRemaining = overallBudget - familyTotals.expense;
@@ -1636,184 +1673,207 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
       )
     : dailyThisMonth;
 
-  // Date-filterable family summary (defaults to the current month).
-  const [range, setRange] = useState(() => ({ from: thisMonthKey() + "-01", to: todayISO() }));
-  const inRange = data.transactions.filter(
-    (t) => (!range.from || t.date >= range.from) && (!range.to || t.date <= range.to)
-  );
-  const rangeIncome = inRange.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const rangeExpense = inRange.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  // ── period selector (This month / Last month / This year / All time / Custom)
+  const [period, setPeriod] = useState("month");
+  const [custom, setCustom] = useState(() => ({ from: thisMonthKey() + "-01", to: todayISO() }));
+  const [showAllCats, setShowAllCats] = useState(false);
+  const ymd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const today = new Date();
+  const range =
+    period === "last" ? { from: ymd(new Date(today.getFullYear(), today.getMonth() - 1, 1)), to: ymd(new Date(today.getFullYear(), today.getMonth(), 0)) }
+    : period === "year" ? { from: today.getFullYear() + "-01-01", to: ymd(today) }
+    : period === "all" ? { from: "", to: "" }
+    : period === "custom" ? custom
+    : { from: thisMonthKey() + "-01", to: todayISO() };
+  const inRange = data.transactions.filter((t) => (!range.from || t.date >= range.from) && (!range.to || t.date <= range.to));
+  const sum = (arr, f) => arr.reduce((x, t) => x + f(t), 0);
+  const fundShare = (t, id) => (t.paidFrom || []).filter((p) => p.memberId === id).reduce((x, p) => x + p.amount, 0);
+  const sel = isPersonView ? selectedMember : null;
+  const rangeIncome = sum(inRange.filter((t) => t.type === "income" && (!sel || t.memberId === sel.id)), (t) => t.amount);
+  const rangeSpent = sum(inRange.filter((t) => t.type === "expense" && (!sel || t.memberId === sel.id)), (t) => t.amount);
+  const rangeSaved = rangeIncome - rangeSpent;
+
+  // ── balance = in hand + to receive − to pay
+  const paidOnDebt = (id) => data.transactions.filter((t) => t.debtId === id).reduce((x, t) => x + t.amount, 0);
+  const debtLeft = (d) => Math.max(0, d.totalAmount - paidOnDebt(d.id));
+  const openDebts = data.debts.filter((d) => !isDebtSettled(d, data.transactions));
+  const inHand = sel
+    ? (data.places || []).filter((pl) => pl.ownerId === sel.id).reduce((x, pl) => x + (pl.balance || 0), 0)
+    : sum(data.transactions.filter((t) => t.type === "income"), (t) => t.amount) - sum(data.transactions.filter((t) => t.type === "expense"), (t) => t.amount);
+  const toReceive = sum(openDebts.filter((d) => (sel ? (d.direction === "owed_to_me" && d.memberId === sel.id && !d.internal) || (d.internal && d.toMember === sel.id) : d.direction === "owed_to_me" && !d.internal)), debtLeft);
+  const toPay = sum(openDebts.filter((d) => (sel ? (d.direction === "i_owe" && d.memberId === sel.id && !d.internal) || (d.internal && d.fromMember === sel.id) : d.direction === "i_owe" && !d.internal)), debtLeft);
+  const balance = inHand + toReceive - toPay;
+  const heroColor = sel ? sel.color || "#1e3a5f" : null;
+
+  // ── spending by category for the chosen period
+  const catRows = data.categories
+    .map((c) => ({ ...c, spent: sum(inRange.filter((t) => t.type === "expense" && t.categoryId === c.id && (!sel || t.memberId === sel.id)), (t) => t.amount) }))
+    .filter((c) => c.spent > 0)
+    .sort((x, y) => y.spent - x.spent);
+  const catTotal = sum(catRows, (c) => c.spent);
+  const shownCats = showAllCats ? catRows : catRows.slice(0, 5);
+  const showBudgets = !sel && period === "month";
+
+  // ── by person (family view only)
   const perPerson = data.members
-    .map((m) => {
-      const income = inRange
-        .filter((t) => t.type === "income" && t.memberId === m.id)
-        .reduce((s, t) => s + t.amount, 0);
-      // money that came out of this person's pocket (their share of expenses)
-      const spentFrom = inRange
-        .filter((t) => t.type === "expense")
-        .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === m.id).reduce((x, p) => x + p.amount, 0), 0);
-      return { m, income, spentFrom };
-    })
+    .map((m) => ({ m, income: sum(inRange.filter((t) => t.type === "income" && t.memberId === m.id), (t) => t.amount), spentFrom: sum(inRange.filter((t) => t.type === "expense" && t.memberId === m.id), (t) => t.amount) }))
     .filter((r) => r.income > 0 || r.spentFrom > 0);
 
+  // ── latest entries
+  const recent = data.transactions
+    .filter((t) => !sel || t.memberId === sel.id)
+    .slice()
+    .sort((x, y) => y.date.localeCompare(x.date) || String(y.createdAt || "").localeCompare(String(x.createdAt || "")))
+    .slice(0, 5);
+
+  const hdr = "text-[15px] font-semibold tracking-tight text-indigo-950";
+
   return (
-    <div className="space-y-5">
-      {viewMode === "family" ? (
-        <>
-          <Card className="p-5 bg-gradient-to-br from-indigo-950 to-indigo-900 text-amber-50 border-none">
-            <div className="flex items-center gap-2 text-indigo-300 text-xs uppercase tracking-wide mb-1">
-              <Wallet size={13} /> Family Net Worth
+    <div className="space-y-4">
+      {/* 1. one number first: total balance */}
+      <Card className="p-5 border-none text-amber-50 bg-gradient-to-br from-indigo-950 to-indigo-900" style={sel ? { background: `linear-gradient(135deg, ${heroColor}, ${heroColor}cc)` } : undefined}>
+        <div className="text-xs text-white/70 mb-1">{sel ? `${sel.name}'s balance` : "Family balance"}</div>
+        <div className="font-mono text-3xl font-semibold tabular-nums">{fmt(balance)}</div>
+        <div className="grid grid-cols-3 gap-2 mt-4 pt-3.5 border-t border-white/15">
+          {[["In hand", inHand], ["To receive", toReceive], ["To pay", toPay]].map(([label, v]) => (
+            <div key={label}>
+              <div className="text-[11px] text-white/65">{label}</div>
+              <div className="font-mono text-sm font-semibold tabular-nums">{fmt(v)}</div>
             </div>
-            <div className="font-mono text-3xl font-semibold tabular-nums">{fmt(netWorth)}</div>
-            <p className="text-[11px] text-indigo-300 mt-1">Cash + owed to you − debts you owe</p>
-          </Card>
-
-          <Card className="p-4 space-y-3.5">
-            <div className="flex items-center justify-between">
-              <h3 className="font-serif text-base text-indigo-950">Family summary</h3>
-              <button
-                type="button"
-                onClick={() => setRange({ from: thisMonthKey() + "-01", to: todayISO() })}
-                className="text-[11px] font-medium text-amber-700 hover:underline"
-              >
-                This month
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">From</label>
-                <input type="date" className={inputCls} value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">Till</label>
-                <input type="date" className={inputCls} value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-emerald-50 p-3">
-                <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-medium mb-1">
-                  <TrendingUp size={13} /> Total family income
-                </div>
-                <div className="font-mono text-xl font-semibold text-emerald-700 tabular-nums">{fmt(rangeIncome)}</div>
-              </div>
-              <div className="rounded-xl bg-rose-50 p-3">
-                <div className="flex items-center gap-1.5 text-rose-700 text-xs font-medium mb-1">
-                  <TrendingDown size={13} /> Total family spent
-                </div>
-                <div className="font-mono text-xl font-semibold text-rose-700 tabular-nums">{fmt(rangeExpense)}</div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-3 mb-1.5 text-[10px] uppercase tracking-wide text-stone-400">
-                <span className="flex-1">Per person</span>
-                <span className="w-20 text-right">Income</span>
-                <span className="w-20 text-right">Spent</span>
-              </div>
-              <div className="space-y-2">
-                {perPerson.length === 0 && <p className="text-xs text-stone-400 py-1">No activity in this period.</p>}
-                {perPerson.map(({ m, income, spentFrom }) => (
-                  <div key={m.id} className="flex items-center gap-3">
-                    <Avatar member={m} size="sm" />
-                    <span className="text-sm font-medium flex-1 min-w-0 truncate">{m.name}</span>
-                    <span className="w-20 text-right text-xs font-mono text-emerald-700 tabular-nums">{income ? "+" + fmt(income) : "—"}</span>
-                    <span className="w-20 text-right text-xs font-mono text-rose-700 tabular-nums">{spentFrom ? "−" + fmt(spentFrom) : "—"}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[10px] text-stone-400 mt-2">"Spent" = money paid from that person's own funds.</p>
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-semibold text-stone-600">Overall monthly budget</span>
-              <span className={`text-xs font-mono font-semibold ${overallRemaining < 0 ? "text-rose-600" : "text-stone-500"}`}>
-                {overallRemaining < 0 ? `${fmt(Math.abs(overallRemaining))} over` : `${fmt(overallRemaining)} left`}
-              </span>
-            </div>
-            <ProgressBar pct={overallPct} tone={overallPct >= 100 ? "over" : overallPct >= 80 ? "warn" : "ok"} />
-            <div className="text-[11px] text-stone-400 mt-1.5">{fmt(familyTotals.expense)} of {fmt(overallBudget)} spent</div>
-          </Card>
-        </>
-      ) : (
-        selectedMember && (
-          <PersonDashboard
-            member={selectedMember}
-            data={data}
-            onUpdateMember={onUpdateMember}
-            onCategoryClick={onCategoryClick}
-          />
-        )
-      )}
-
-      <>
-      <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-3">
-          {isPersonView ? `${selectedMember.name}'s category spending — ${monthLabel(thisMonthKey())}` : `Category budgets — ${monthLabel(thisMonthKey())}`}
-        </h3>
-        <div className="space-y-3">
-          {data.categories.filter((c) => c.budgetLimit > 0).map((c) => {
-            const spent = activeCategorySpend(c.id);
-            const pct = (spent / c.budgetLimit) * 100;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => onCategoryClick(c.id)}
-                className="w-full text-left"
-              >
-                <div className="flex items-center gap-2.5 mb-1">
-                  <IconBadge iconName={c.icon} color={c.color} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium truncate">{c.name}</span>
-                      <span className={`text-xs font-mono ${pct >= 100 ? "text-rose-600 font-semibold" : "text-stone-400"}`}>
-                        {fmt(spent)} / {fmt(c.budgetLimit)}
-                      </span>
-                    </div>
-                    <ProgressBar pct={pct} tone={pct >= 100 ? "over" : pct >= 80 ? "warn" : "ok"} />
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-          {isPersonView && data.categories.filter((c) => c.budgetLimit > 0).every((c) => activeCategorySpend(c.id) === 0) && (
-            <p className="text-xs text-stone-400">No category spending yet this month.</p>
-          )}
+          ))}
         </div>
+        <p className="text-[11px] text-white/55 mt-3">Balance = money in hand + money to receive − money to pay</p>
       </Card>
 
-      {activeCategoryPie.length > 0 && (
-        <Card className="p-4">
-          <h3 className="font-serif text-base text-indigo-950 mb-2">
-            {isPersonView ? `${selectedMember.name}'s spending by category — ${monthLabel(thisMonthKey())}` : `Spending by category — ${monthLabel(thisMonthKey())}`}
-          </h3>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={activeCategoryPie} dataKey="value" nameKey="name" innerRadius={45} outerRadius={80} paddingAngle={2} onClick={(entry) => onCategoryClick(entry.id)} cursor="pointer">
-                  {activeCategoryPie.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v) => fmt(v)} />
-              </PieChart>
-            </ResponsiveContainer>
+      {/* 2. period switch */}
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        {[["month", "This month"], ["last", "Last month"], ["year", "This year"], ["all", "All time"], ["custom", "Custom"]].map(([k, label]) => (
+          <Pill key={k} active={period === k} onClick={() => setPeriod(k)}>{label}</Pill>
+        ))}
+      </div>
+      {period === "custom" && (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-medium text-stone-500 mb-1 ml-0.5">From</label>
+            <input type="date" className={inputCls} value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1 justify-center">
-            {activeCategoryPie.map((c, i) => (
-              <button key={i} type="button" onClick={() => onCategoryClick(c.id)} className="flex items-center gap-1.5 text-xs text-stone-500">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
-                {c.name}
-              </button>
+          <div>
+            <label className="block text-xs font-medium text-stone-500 mb-1 ml-0.5">Till</label>
+            <input type="date" className={inputCls} value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
+          </div>
+        </div>
+      )}
+
+      {/* 3. income / spent / saved */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <div className="rounded-xl bg-emerald-50 p-3">
+          <div className="text-xs font-medium text-emerald-700 mb-1">Income</div>
+          <div className="font-mono text-base font-semibold text-emerald-700 tabular-nums">{fmt(rangeIncome)}</div>
+        </div>
+        <div className="rounded-xl bg-rose-50 p-3">
+          <div className="text-xs font-medium text-rose-700 mb-1">Spent</div>
+          <div className="font-mono text-base font-semibold text-rose-700 tabular-nums">{fmt(rangeSpent)}</div>
+        </div>
+        <div className="rounded-xl bg-stone-100 p-3">
+          <div className="text-xs font-medium text-stone-600 mb-1">{rangeSaved < 0 ? "Overspent" : "Saved"}</div>
+          <div className={`font-mono text-base font-semibold tabular-nums ${rangeSaved < 0 ? "text-rose-700" : "text-stone-800"}`}>{fmt(Math.abs(rangeSaved))}</div>
+        </div>
+      </div>
+
+      {/* 4. budget */}
+      {sel ? (
+        <PersonDashboard part="budget" member={selectedMember} data={data} onUpdateMember={onUpdateMember} onCategoryClick={onCategoryClick} />
+      ) : (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className={hdr}>Monthly budget</span>
+            <span className={`text-xs font-mono font-semibold ${overallRemaining < 0 ? "text-rose-600" : "text-stone-500"}`}>
+              {overallRemaining < 0 ? `${fmt(Math.abs(overallRemaining))} over` : `${fmt(overallRemaining)} left`}
+            </span>
+          </div>
+          <ProgressBar pct={overallPct} tone={overallPct >= 100 ? "over" : overallPct >= 80 ? "warn" : "ok"} />
+          <div className="text-xs text-stone-500 mt-1.5">{fmt(familyTotals.expense)} of {fmt(overallBudget)} spent this month</div>
+        </Card>
+      )}
+
+      {/* 5. who earned / spent (family only) */}
+      {!sel && perPerson.length > 1 && (
+        <Card className="p-4">
+          <h3 className={hdr + " mb-3"}>By person</h3>
+          <div className="space-y-2.5">
+            {perPerson.map(({ m, income, spentFrom }) => (
+              <div key={m.id} className="flex items-center gap-3">
+                <Avatar member={m} size="sm" />
+                <span className="text-sm font-medium flex-1 min-w-0 truncate">{m.name}</span>
+                <span className="text-xs font-mono text-emerald-700 tabular-nums">{income ? "+" + fmt(income) : "—"}</span>
+                <span className="w-20 text-right text-xs font-mono text-rose-700 tabular-nums">{spentFrom ? "−" + fmt(spentFrom) : "—"}</span>
+              </div>
             ))}
           </div>
         </Card>
       )}
 
+      {/* 6. spending by category: one card (chart + list) */}
+      <Card className="p-4">
+        <div className="flex items-baseline justify-between mb-2">
+          <h3 className={hdr}>Spending by category</h3>
+          <span className="text-xs font-mono text-stone-500">{fmt(catTotal)}</span>
+        </div>
+        {catRows.length === 0 ? (
+          <p className="text-sm text-stone-500 py-6 text-center">No spending in this period.</p>
+        ) : (
+          <>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={catRows} dataKey="spent" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={2} onClick={(entry) => onCategoryClick(entry.id)}>
+                    {catRows.map((c) => <Cell key={c.id} fill={c.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => fmt(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-3 mt-2">
+              {shownCats.map((c) => {
+                const share = catTotal ? (c.spent / catTotal) * 100 : 0;
+                const bPct = c.budgetLimit ? (c.spent / c.budgetLimit) * 100 : 0;
+                const useBudget = showBudgets && c.budgetLimit > 0;
+                return (
+                  <button key={c.id} type="button" onClick={() => onCategoryClick(c.id)} className="w-full text-left">
+                    <div className="flex items-center gap-2.5">
+                      <IconBadge iconName={c.icon} color={c.color} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium truncate">{c.name}</span>
+                          <span className="text-sm font-mono font-semibold tabular-nums">{fmt(c.spent)}</span>
+                        </div>
+                        {useBudget ? (
+                          <>
+                            <ProgressBar pct={bPct} tone={bPct >= 100 ? "over" : bPct >= 80 ? "warn" : "ok"} />
+                            <div className="text-xs text-stone-500 mt-0.5">of {fmt(c.budgetLimit)} budget</div>
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: share + "%", backgroundColor: c.color }} /></div>
+                            <span className="text-xs text-stone-500 w-9 text-right">{Math.round(share)}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {catRows.length > 5 && (
+              <button type="button" onClick={() => setShowAllCats((v) => !v)} className="w-full mt-3 text-xs font-semibold text-indigo-950 py-2 rounded-lg bg-stone-100">
+                {showAllCats ? "Show less" : `Show all ${catRows.length} categories`}
+              </button>
+            )}
+          </>
+        )}
+      </Card>
+
+      {/* 7. trend */}
       {activeMonthlyTrend.length > 0 && (() => {
         const trendData = trendView === "yearly" ? activeYearlyTrend : trendView === "daily" ? activeDailyThisMonth : activeMonthlyTrend;
         const trendTitle = (isPersonView ? `${selectedMember.name}'s ` : "") + (trendView === "yearly" ? "Yearly trend" : trendView === "daily" ? `Daily — ${monthLabel(thisMonthKey())}` : "Monthly trend");
@@ -1821,7 +1881,7 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
         return (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-            <h3 className="font-serif text-base text-indigo-950">{trendTitle}</h3>
+            <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950">{trendTitle}</h3>
             <div className="flex gap-1.5">
               <Pill active={trendView === "monthly"} onClick={() => setTrendView("monthly")}>Monthly</Pill>
               <Pill active={trendView === "yearly"} onClick={() => setTrendView("yearly")}>Yearly</Pill>
@@ -1863,12 +1923,43 @@ function Dashboard({ data, viewMode, selectedMember, familyTotals, netWorth, mem
         </Card>
         );
       })()}
-      </>
+
+      {/* 8. latest entries */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className={hdr}>Recent activity</h3>
+          <button type="button" onClick={onViewAll} className="text-xs font-semibold text-amber-700">See all</button>
+        </div>
+        {recent.length === 0 ? (
+          <p className="text-sm text-stone-500 py-2">No entries yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {recent.map((t) => {
+              const cat = data.categories.find((c) => c.id === t.categoryId);
+              const mem = data.members.find((m) => m.id === t.memberId);
+              const inc = t.type === "income";
+              return (
+                <div key={t.id} className="flex items-center gap-2.5">
+                  {cat ? <IconBadge iconName={cat.icon} color={cat.color} size="sm" /> : <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><ArrowUpRight size={14} /></div>}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{t.note || cat?.name || (inc ? "Income" : "Expense")}</div>
+                    <div className="text-xs text-stone-500">{shortDate(t.date)}{mem ? " · " + mem.name : ""}</div>
+                  </div>
+                  <span className={`font-mono text-sm font-semibold tabular-nums ${inc ? "text-emerald-700" : "text-rose-700"}`}>{inc ? "+" : "−"}{fmt(t.amount)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* 9. person-only extras: accounts, allowances, debts, recurring */}
+      {sel && <PersonDashboard part="rest" member={selectedMember} data={data} onUpdateMember={onUpdateMember} onCategoryClick={onCategoryClick} />}
     </div>
   );
 }
 
-function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
+function PersonDashboard({ member, data, onUpdateMember, onCategoryClick, part = "all" }) {
   const cardColor = member.color || "#1e3a5f";
   const paidOnDebt = (id) => data.transactions.filter((t) => t.debtId === id).reduce((s, t) => s + t.amount, 0);
   const monthTx = data.transactions.filter((t) => monthKeyOf(t.date) === thisMonthKey());
@@ -1877,8 +1968,8 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
     .reduce((s, t) => s + t.amount, 0);
   // money that left this person's own pocket this month (their share of expenses)
   const spentThisMonth = monthTx
-    .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + (t.paidFrom || []).filter((p) => p.memberId === member.id).reduce((x, p) => x + p.amount, 0), 0);
+    .filter((t) => t.type === "expense" && t.memberId === member.id)
+    .reduce((s, t) => s + t.amount, 0);
 
   // ── traceable, date-range summary (mirrors the Family summary card) ──
   const [range, setRange] = useState(() => ({ from: thisMonthKey() + "-01", to: todayISO() }));
@@ -1925,79 +2016,8 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
 
   return (
     <div className="space-y-5">
-      {/* personal net worth */}
-      <Card className="p-5" style={{ background: `linear-gradient(135deg, ${cardColor}, ${cardColor}cc)` }}>
-        <div className="flex items-center gap-3 mb-3">
-          <Avatar member={member} size="lg" />
-          <div>
-            <div className="font-serif text-lg text-white">{member.name}</div>
-            <div className="text-[11px] text-white/70">Personal net worth</div>
-          </div>
-        </div>
-        <div className="font-mono text-3xl font-semibold text-white tabular-nums">{fmt(netWorth)}</div>
-        <p className="text-[11px] text-white/70 mt-1">Own sources {fmt(sourcesTotal)} + owed {fmt(owedAmt)} − owe {fmt(oweAmt)}</p>
-      </Card>
-
-      {/* traceable income / spent, any date range */}
-      <Card className="p-4 space-y-3.5">
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base text-indigo-950">My summary</h3>
-          <button
-            type="button"
-            onClick={() => setRange({ from: thisMonthKey() + "-01", to: todayISO() })}
-            className="text-[11px] font-medium text-amber-700 hover:underline"
-          >
-            This month
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">From</label>
-            <input type="date" className={inputCls} value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-stone-500 mb-1 ml-0.5">Till</label>
-            <input type="date" className={inputCls} value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-emerald-50 p-3">
-            <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-medium mb-1">
-              <TrendingUp size={13} /> My income
-            </div>
-            <div className="font-mono text-xl font-semibold text-emerald-700 tabular-nums">{fmt(rangeIncome)}</div>
-          </div>
-          <div className="rounded-xl bg-rose-50 p-3">
-            <div className="flex items-center gap-1.5 text-rose-700 text-xs font-medium mb-1">
-              <TrendingDown size={13} /> My spent
-            </div>
-            <div className="font-mono text-xl font-semibold text-rose-700 tabular-nums">{fmt(rangeSpent)}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-1 border-t border-stone-100">
-          <span className="text-xs text-stone-500">Net for this period</span>
-          <span className={`font-mono text-sm font-semibold tabular-nums ${rangeNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-            {rangeNet >= 0 ? "+" : "−"}{fmt(Math.abs(rangeNet))}
-          </span>
-        </div>
-        <p className="text-[10px] text-stone-400">"Spent" = money paid from your own funds.</p>
-      </Card>
-
-      {/* income / spent this month, at a glance */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4">
-          <div className="text-xs font-medium text-emerald-700 mb-1">Income (this month)</div>
-          <div className="font-mono text-lg font-semibold text-emerald-700 tabular-nums">{fmt(incomeThisMonth)}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs font-medium text-rose-700 mb-1">Spent from own funds</div>
-          <div className="font-mono text-lg font-semibold text-rose-700 tabular-nums">{fmt(spentThisMonth)}</div>
-        </Card>
-      </div>
-
+      {part !== "rest" && (
+        <>
       {/* personal monthly budget */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-1.5">
@@ -2028,10 +2048,15 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
         )}
       </Card>
 
+        </>
+      )}
+
+      {part !== "budget" && (
+        <>
       {/* my sources */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-serif text-base text-indigo-950">My sources</h3>
+          <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950">My sources</h3>
           <span className="font-mono text-sm font-semibold text-stone-600 tabular-nums">{fmt(sourcesTotal)}</span>
         </div>
         <div className="space-y-2">
@@ -2050,7 +2075,7 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
       {myAllowances.length > 0 && (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-serif text-base text-indigo-950 flex items-center gap-1.5"><HandCoins size={15} /> My Ghar Kharcha</h3>
+            <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 flex items-center gap-1.5"><HandCoins size={15} /> My Ghar Kharcha</h3>
           </div>
           <div className="space-y-2">
             {myAllowances.map((a) => (
@@ -2066,7 +2091,7 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
       {/* my debts */}
       {(owedToThem.length > 0 || theyOwe.length > 0) && (
         <Card className="p-4">
-          <h3 className="font-serif text-base text-indigo-950 mb-2">My debts</h3>
+          <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-2">My debts</h3>
           {owedToThem.length > 0 && (
             <div className="mb-2">
               <div className="text-[11px] uppercase tracking-wide text-emerald-700 mb-1">Owed to {member.name}</div>
@@ -2095,7 +2120,7 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
       {/* my recurring */}
       {recurringMine.length > 0 && (
         <Card className="p-4">
-          <h3 className="font-serif text-base text-indigo-950 mb-2">My recurring</h3>
+          <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-2">My recurring</h3>
           <div className="space-y-1.5">
             {recurringMine.map((r) => (
               <div key={r.id} className="flex items-center justify-between text-sm">
@@ -2109,26 +2134,8 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick }) {
         </Card>
       )}
 
-      {/* recent spends */}
-      <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-2">Recent spends</h3>
-        <div className="space-y-2">
-          {recentTx.map((t) => {
-            const cat = data.categories.find((c) => c.id === t.categoryId);
-            return (
-              <div key={t.id} className="flex items-center gap-2.5">
-                {cat && <IconBadge iconName={cat.icon} color={cat.color} size="sm" />}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm truncate">{t.note || cat?.name}</div>
-                  <div className="text-[10px] text-stone-400">{t.date}</div>
-                </div>
-                <span className="font-mono text-sm text-rose-700">{fmt(t.amount)}</span>
-              </div>
-            );
-          })}
-          {recentTx.length === 0 && <p className="text-xs text-stone-400">No spends yet.</p>}
-        </div>
-      </Card>
+        </>
+      )}
     </div>
   );
 }
@@ -2138,7 +2145,7 @@ function ShareAccessCard({ owner, allMembers, onToggle }) {
   const shared = owner.sharedWith || [];
   return (
     <Card className="p-4">
-      <h3 className="font-serif text-base text-indigo-950 mb-1">Share my spending with</h3>
+      <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-1">Share my spending with</h3>
       <p className="text-xs text-stone-400 mb-3">{useLang().t("onlyTheseSee")}</p>
       <div className="flex flex-wrap gap-2">
         {others.map((m) => {
@@ -2157,7 +2164,7 @@ function ShareAccessCard({ owner, allMembers, onToggle }) {
             </button>
           );
         })}
-        {others.length === 0 && <p className="text-xs text-stone-400">Koi aur member nahi hai.</p>}
+        {others.length === 0 && <p className="text-xs text-stone-500">There are no other members to choose from.</p>}
       </div>
     </Card>
   );
@@ -2167,7 +2174,11 @@ function ShareAccessCard({ owner, allMembers, onToggle }) {
 
 function TransactionsTab({ data, mode = "expense", filters, setFilters, filteredTx, incomeMembers, onDelete, onEdit, onAdd }) {
   const isIncome = mode === "income";
-  const memberOptions = isIncome ? (incomeMembers || []) : data.members;
+  const baseOptions = isIncome ? (incomeMembers || []) : data.members;
+  const memberOptions = filters.member !== "all" && !baseOptions.some((m) => m.id === filters.member)
+    ? [...baseOptions, ...data.members.filter((m) => m.id === filters.member)]
+    : baseOptions;
+  const hasFilters = !!(filters.q || filters.category !== "all" || filters.from || filters.to);
   return (
     <div className="space-y-4">
       <Card className="p-3.5 space-y-2.5">
@@ -2224,8 +2235,8 @@ function TransactionsTab({ data, mode = "expense", filters, setFilters, filtered
                     {t.type === "income" ? "+" : "−"}{fmt(t.amount)}
                   </span>
                 </div>
-                <div className="text-[11px] text-stone-400 flex items-center gap-1.5 mt-0.5">
-                  <Calendar size={11} /> {t.date} · {mem?.name || "—"}
+                <div className="text-xs text-stone-500 flex items-center gap-1.5 mt-0.5">
+                  <Calendar size={12} /> {shortDate(t.date)} · {mem?.name || "—"}
                   {t.paidFrom?.length > 0 && (
                     <span className="truncate"> · paid by {t.paidFrom.map((p) => data.members.find((m) => m.id === p.memberId)?.name).join(", ")}</span>
                   )}
@@ -2233,6 +2244,11 @@ function TransactionsTab({ data, mode = "expense", filters, setFilters, filtered
                     <span className="truncate"> · {data.places.find((p) => p.id === t.placeId)?.name}</span>
                   )}
                 </div>
+                {t.updatedAt && (
+                  <div className="text-[11px] text-stone-400 mt-0.5">
+                    {t.updatedAt !== t.createdAt ? "Last modified" : "Added"} {fmtStamp(t.updatedAt)}
+                  </div>
+                )}
               </div>
               <button onClick={() => onEdit(t)} className="text-stone-300 hover:text-indigo-700 p-1" title="Edit / correct">
                 <Pencil size={15} />
@@ -2243,7 +2259,14 @@ function TransactionsTab({ data, mode = "expense", filters, setFilters, filtered
             </Card>
           );
         })}
-        {filteredTx.length === 0 && <p className="text-center text-sm text-stone-400 py-8">Koi transaction nahi mila.</p>}
+        {filteredTx.length === 0 && (
+          <EmptyState
+            title={isIncome ? "No income entries found" : "No transactions found"}
+            text={hasFilters ? "Nothing matches your current search or filters. Try changing them, or clear the filters." : isIncome ? "Income you add will appear here." : "Expenses you add will appear here."}
+            actionLabel={hasFilters ? "Clear filters" : isIncome ? "Add income" : "Add expense"}
+            onAction={() => (hasFilters ? setFilters({ ...filters, q: "", category: "all", from: "", to: "" }) : onAdd(isIncome ? "income" : "expense"))}
+          />
+        )}
       </div>
     </div>
   );
@@ -2276,7 +2299,7 @@ function PlacesTab({ data, viewMode, selectedMember, onAddPlace, onUpdatePlace, 
       </Card>
 
       <div className="flex items-center justify-between">
-        <h3 className="font-serif text-base text-indigo-950">{isPersonView ? `${selectedMember.name}'s places` : "Your places"}</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950">{isPersonView ? `${selectedMember.name}'s places` : "Your places"}</h3>
         <button onClick={() => setShowNew(true)} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full flex items-center gap-1">
           <Plus size={13} /> Place
         </button>
@@ -2318,9 +2341,7 @@ function PlacesTab({ data, viewMode, selectedMember, onAddPlace, onUpdatePlace, 
           </Card>
         ))}
         {places.length === 0 && (
-          <p className="text-center text-sm text-stone-400 py-8">
-            Koi place add nahi kiya abhi tak. Bank account, cash, SIP — jahan bhi paisa rakha hai, add karo.
-          </p>
+          <EmptyState icon={Wallet} title="No places added yet" text="Add a bank account, cash wallet or investment to track where your money is kept." />
         )}
       </div>
 
@@ -2452,7 +2473,7 @@ function AllowancesTab({ data, onAdd, onUpdate, onDelete, onAdjust }) {
       </Card>
 
       <div className="flex items-center justify-between">
-        <h3 className="font-serif text-base text-indigo-950">Allowances</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950">Allowances</h3>
         <button onClick={() => setShowNew(true)} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full flex items-center gap-1">
           <Plus size={13} /> Allowance
         </button>
@@ -2578,7 +2599,7 @@ function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCatego
       </Card>
 
       <div className="flex items-center justify-between">
-        <h3 className="font-serif text-base text-indigo-950">Category limits</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950">Category limits</h3>
         <button onClick={() => setShowNew(true)} className="text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-1.5 rounded-full flex items-center gap-1">
           <Plus size={13} /> Category
         </button>
@@ -2646,27 +2667,34 @@ function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCatego
 
 function NewCategoryForm({ onSave, compact, editing = null, existingCount = 0 }) {
   const [name, setName] = useState(editing?.name || "");
-  const [icon, setIcon] = useState(editing?.icon || "MoreHorizontal");
-  const [color, setColor] = useState(editing?.color || COLOR_CHOICES[existingCount % COLOR_CHOICES.length]);
+  const [icon, setIcon] = useState(editing?.icon || "ShoppingCart");
+  const [color, setColor] = useState(editing?.color || PALETTE[existingCount % PALETTE.length]);
   const [budget, setBudget] = useState(editing?.budgetLimit ?? 1000);
   return (
     <div>
+      <div className="flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 mb-4">
+        <IconBadge iconName={icon} color={color} size="lg" />
+        <div className="min-w-0">
+          <div className="font-semibold text-stone-800 truncate">{name || "Category name"}</div>
+          <div className="text-xs text-stone-500">Monthly budget {fmt(Number(budget) || 0)}</div>
+        </div>
+      </div>
       <Field label="Name">
-        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pet care" />
+        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Milk, Pet care" />
+      </Field>
+      <Field label="Monthly budget (₹)">
+        <input type="number" inputMode="numeric" className={inputCls} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
       </Field>
       <Field label="Icon">
         <IconPicker value={icon} color={color} onChange={setIcon} />
       </Field>
-      <Field label="Color">
+      <Field label="Colour">
         <ColorPicker value={color} onChange={setColor} />
       </Field>
-      <Field label="Monthly budget">
-        <input type="number" className={inputCls} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
-      </Field>
       <button
-        disabled={!name}
-        onClick={() => onSave({ name, icon, color, budgetLimit: budget })}
-        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+        disabled={!name.trim()}
+        onClick={() => onSave({ name: name.trim(), icon, color, budgetLimit: budget })}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40 mt-1"
       >
         {editing ? "Save changes" : compact ? "Add category" : "Save category"}
       </button>
@@ -2676,6 +2704,21 @@ function NewCategoryForm({ onSave, compact, editing = null, existingCount = 0 })
 
 /* ------------------------- Statement import (CSV) ------------------------- */
 const UploadIcon = LucideIcons.Upload || LucideIcons.FileUp;
+const ReceiptIcon = LucideIcons.Receipt || Search;
+function EmptyState({ icon: Icon = ReceiptIcon, title, text, actionLabel, onAction }) {
+  return (
+    <div className="flex flex-col items-center text-center py-12 px-6">
+      <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mb-4">
+        <Icon size={26} strokeWidth={1.6} />
+      </div>
+      <h4 className="text-[15px] font-semibold text-stone-800">{title}</h4>
+      {text && <p className="text-sm text-stone-500 mt-1 max-w-xs">{text}</p>}
+      {actionLabel && (
+        <button type="button" onClick={onAction} className="mt-4 bg-indigo-950 text-amber-50 rounded-full px-5 py-2 text-sm font-semibold">{actionLabel}</button>
+      )}
+    </div>
+  );
+}
 const STARTER_RULES = [
   [/zepto|bigbasket|blinkit|grofers|dmart|d mart|jiomart|instamart|reliance fresh|reliance smart|more retail|milk|dairy|amul|kirana|provision|vegetable|sabzi|bakery|supermarket|swiggy|zomato|restaurant|\bcafe\b|dominos|pizza|mcdonald|\bkfc\b|burger|starbucks|biryani|hotel/, /food|grocer|dining/],
   [/\buber\b|\bola\b|rapido|irctc|redbus|metro|railway|petrol|fuel|hpcl|bpcl|iocl|indian oil|fastag|\btoll|parking|makemytrip|indigo|air india|\bcab\b/, /travel|transport|vehicle|fuel/],
@@ -2925,6 +2968,8 @@ function debtSettledDate(d, transactions) {
   const dates = transactions.filter((t) => t.debtId === d.id).map((t) => t.date).sort();
   return dates.length ? dates[dates.length - 1] : "";
 }
+const fmtStamp = (iso) =>
+  iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "";
 const shortDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
 
@@ -2954,8 +2999,8 @@ function DebtsTab({ data, viewMode, selectedMember, paidOnDebt, onAdd, onPay, on
         <Plus size={15} /> Add a debt
       </button>
 
-      <DebtGroup title={isPersonView ? `Money coming to ${selectedMember.name}` : "Money coming to you"} tone="emerald" debts={owedActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} members={data.members} />
-      <DebtGroup title={isPersonView ? `${selectedMember.name} needs to pay` : "Money you need to pay"} tone="rose" debts={oweActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} members={data.members} />
+      <DebtGroup title={isPersonView ? `Money ${selectedMember.name} will receive` : "Money to receive"} tone="emerald" debts={owedActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} members={data.members} />
+      <DebtGroup title={isPersonView ? `Money ${selectedMember.name} needs to pay` : "Money to pay"} tone="rose" debts={oweActive} paidOnDebt={paidOnDebt} onPay={onPay} onDelete={onDelete} onSettle={onSettle} members={data.members} />
 
       {completed.length > 0 && (
         <div>
@@ -2964,7 +3009,7 @@ function DebtsTab({ data, viewMode, selectedMember, paidOnDebt, onAdd, onPay, on
             onClick={() => setShowSettled((s) => !s)}
             className="w-full flex items-center justify-between mb-2 group"
           >
-            <h3 className="font-serif text-base text-stone-500">Settled &amp; completed ({completed.length})</h3>
+            <h3 className="text-[15px] font-semibold tracking-tight text-stone-600">Settled &amp; completed ({completed.length})</h3>
             <ChevronDown size={18} className={`text-stone-400 transition-transform ${showSettled ? "rotate-180" : ""}`} />
           </button>
           {showSettled && (
@@ -2992,7 +3037,7 @@ function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle, 
   const memberName = (id) => members.find((m) => m.id === id)?.name;
   return (
     <div>
-      <h3 className={`font-serif text-base mb-2 ${color}`}>{title}</h3>
+      <h3 className={`text-[15px] font-semibold tracking-tight mb-2.5 ${color}`}>{title}</h3>
       <div className="space-y-2.5">
         {debts.map((d) => {
           const paid = paidOnDebt(d.id);
@@ -3002,19 +3047,19 @@ function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle, 
             <Card key={d.id} className="p-4">
               <div className="flex items-start justify-between gap-2 mb-1.5">
                 <div>
-                  <div className="text-sm font-semibold flex items-center gap-1.5">
+                  <div className="text-[15px] font-semibold text-stone-800 flex items-center gap-1.5">
                     {d.personName}
                     {d.internal && (
-                      <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">family</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">family</span>
                     )}
                   </div>
                   {d.memberId && memberName(d.memberId) && (
-                    <div className="text-[11px] text-stone-400">
-                      {tone === "emerald" ? "Given by / to receive back by" : "To be paid by"} {memberName(d.memberId)}
+                    <div className="text-xs text-stone-500">
+                      {tone === "emerald" ? "Lent by" : "Payable by"} {memberName(d.memberId)}
                     </div>
                   )}
-                  {d.note && <div className="text-xs text-stone-400">{d.note}</div>}
-                  {d.dueDate && <div className="text-[11px] text-stone-400">Due {shortDate(d.dueDate)}</div>}
+                  {d.note && <div className="text-xs text-stone-500">{d.note}</div>}
+                  {d.dueDate && <div className="text-xs text-stone-500">Due {shortDate(d.dueDate)}</div>}
                 </div>
                 <button onClick={() => onDelete(d.id)} className="text-stone-300 hover:text-rose-600 p-1"><Trash2 size={14} /></button>
               </div>
@@ -3029,7 +3074,7 @@ function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle, 
                 <>
                   <ProgressBar pct={pct} tone={remaining <= 0 ? "ok" : "warn"} />
                   <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-[11px] text-stone-400">{fmt(paid)} of {fmt(d.totalAmount)} settled</span>
+                    <span className="text-xs text-stone-500">{fmt(paid)} of {fmt(d.totalAmount)} {tone === "emerald" ? "received" : "paid"}</span>
                     <button onClick={() => onPay(d)} className="text-xs font-semibold bg-amber-400 text-indigo-950 px-3 py-1 rounded-full">
                       Record payment
                     </button>
@@ -3039,7 +3084,7 @@ function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle, 
             </Card>
           );
         })}
-        {debts.length === 0 && <p className="text-xs text-stone-400 py-2">Koi active entry nahi.</p>}
+        {debts.length === 0 && <p className="text-sm text-stone-500 py-2">{tone === "emerald" ? "No pending amounts to receive." : "No pending payments."}</p>}
       </div>
     </div>
   );
@@ -3054,17 +3099,17 @@ function SettledDebtCard({ debt: d, paid, settledOn, onDelete, onReopen }) {
           <div className="text-sm font-semibold flex items-center gap-1.5 text-stone-600">
             <span className="truncate">{d.personName}</span>
             {d.internal && (
-              <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">family</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">family</span>
             )}
             <span className="text-[9px] uppercase tracking-wide bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
               <Check size={9} /> settled
             </span>
           </div>
-          {d.note && <div className="text-xs text-stone-400 truncate">{d.note}</div>}
-          <div className="text-[11px] text-stone-400 mt-0.5">
-            <span className={toneText}>{d.direction === "owed_to_me" ? "Was to be paid to you" : "You had to pay this"}</span>
+          {d.note && <div className="text-xs text-stone-500 truncate">{d.note}</div>}
+          <div className="text-xs text-stone-500 mt-0.5">
+            <span className={toneText}>{d.direction === "owed_to_me" ? "Received in full" : "Paid in full"}</span>
             {" · "}{fmt(d.totalAmount)}
-            {settledOn ? ` · cleared ${shortDate(settledOn)}` : ""}
+            {settledOn ? ` · Cleared ${shortDate(settledOn)}` : ""}
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -3261,9 +3306,7 @@ function RecurringTab({ data, viewMode, selectedMember, onAdd, onToggle, onDelet
           );
         })}
         {recurring.length === 0 && (
-          <p className="text-center text-sm text-stone-400 py-8">
-            {isPersonView ? `No recurring entries for ${selectedMember.name}.` : "Koi recurring entry nahi hai."}
-          </p>
+          <EmptyState icon={Repeat} title={isPersonView ? `No recurring entries for ${selectedMember.name}` : "No recurring entries"} text="Add salary, rent or bills that repeat every month." />
         )}
       </div>
     </div>
@@ -3335,7 +3378,7 @@ function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMe
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-3 flex items-center gap-1.5"><ShieldCheck size={16} /> Family access</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-3 flex items-center gap-1.5"><ShieldCheck size={16} /> Family access</h3>
         <p className="text-xs text-stone-500 mb-3">
           Signed in as <span className="font-medium">{user?.email}</span>{isOwner ? " · owner" : ""}
         </p>
@@ -3405,7 +3448,7 @@ function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMe
       </Card>
 
       <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-3 flex items-center gap-1.5"><Repeat size={16} /> Reminders</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-3 flex items-center gap-1.5"><Repeat size={16} /> Reminders</h3>
         {notifPermission === "unsupported" ? (
           <p className="text-xs text-stone-400">Notifications aren't supported in this browser.</p>
         ) : notifPermission === "granted" ? (
@@ -3421,7 +3464,7 @@ function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMe
       </Card>
 
       <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-3">Family members</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-3">Family members</h3>
         <div className="flex flex-wrap gap-2 mb-3">
           {data.members.map((m) => (
             <div key={m.id} className="flex items-center gap-1.5 bg-stone-100 rounded-full pl-1 pr-3 py-1">
@@ -3435,7 +3478,8 @@ function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMe
       </Card>
 
       <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-3">Export & backup</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-1">Export & backup</h3>
+        <p className="text-xs text-stone-500 mb-3">Ledger last updated: {fmtStamp(data.lastModified) || "not recorded yet"}</p>
         <div className="flex flex-wrap gap-2">
           <button onClick={onExportCSV} className="flex items-center gap-1.5 text-xs font-semibold bg-stone-100 px-3 py-2 rounded-full"><Download size={13} /> CSV</button>
           <button onClick={onExportJSON} className="flex items-center gap-1.5 text-xs font-semibold bg-stone-100 px-3 py-2 rounded-full"><Download size={13} /> JSON backup</button>
@@ -3447,7 +3491,7 @@ function SettingsTab({ data, onExportCSV, onExportJSON, onImportJSON, onManageMe
       </Card>
 
       <Card className="p-4">
-        <h3 className="font-serif text-base text-indigo-950 mb-1">Data sharing</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight text-indigo-950 mb-1">Data sharing</h3>
         <p className="text-xs text-stone-500 leading-relaxed">
           This ledger is synced live via Firebase — every approved family member sees the same numbers update in real time, from any device.
         </p>
