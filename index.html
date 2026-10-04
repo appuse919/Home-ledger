@@ -185,8 +185,13 @@ const COLOR_SHADE_GRID = BASE_HUES.map(shadesOf); // [hue][shade], shade 0 = lig
 const COLOR_CHOICES = COLOR_SHADE_GRID.flat();
 
 const CURRENCY = "₹";
-const fmt = (n) => `${CURRENCY}${Math.round(n || 0).toLocaleString("en-IN")}`;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmt = (n) => {
+  const v = Number(n) || 0;
+  const hasPaise = Math.abs(v - Math.round(v)) >= 0.005;
+  return `${CURRENCY}${v.toLocaleString("en-IN", { minimumFractionDigits: hasPaise ? 2 : 0, maximumFractionDigits: 2 })}`;
+};
+const localISO = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const todayISO = () => localISO(new Date());
 const monthKeyOf = (d) => (d || "").slice(0, 7);
 const thisMonthKey = () => todayISO().slice(0, 7);
 const lastMonthKey = () => {
@@ -2025,7 +2030,7 @@ function PersonDashboard({ member, data, onUpdateMember, onCategoryClick, part =
           <div className="flex items-center gap-1">
             <span className="text-xs text-stone-400">₹</span>
             <input
-              type="number"
+              type="number" step="any" inputMode="decimal"
               className="w-24 px-2 py-1 rounded-lg border border-stone-300 text-sm text-right"
               value={budgetInput}
               onChange={(e) => setBudgetInput(e.target.value)}
@@ -2219,46 +2224,51 @@ function TransactionsTab({ data, mode = "expense", filters, setFilters, filtered
         </div>
       </Card>
 
+      {filteredTx.length > 0 && (
+        <div className="flex items-center justify-between px-1">
+          <span className="text-sm text-stone-500">{filteredTx.length} {filteredTx.length === 1 ? "entry" : "entries"}</span>
+          <span className={`font-mono text-sm font-semibold tabular-nums ${isIncome ? "text-emerald-700" : "text-rose-700"}`}>{isIncome ? "+" : "−"}{fmt(filteredTx.reduce((x, t) => x + t.amount, 0))}</span>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {filteredTx.map((t) => {
-          const cat = data.categories.find((c) => c.id === t.categoryId);
-          const mem = data.members.find((m) => m.id === t.memberId);
-          return (
-            <Card key={t.id} className="p-3.5 flex items-center gap-3">
-              {cat ? <IconBadge iconName={cat.icon} color={cat.color} /> : <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700"><ArrowUpRight size={18} /></div>}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium truncate">
-                    {t.note || (t.type === "income" ? "Income" : cat?.name)}
-                  </span>
-                  <span className={`font-mono text-sm font-semibold tabular-nums shrink-0 ${t.type === "income" ? "text-emerald-700" : "text-rose-700"}`}>
-                    {t.type === "income" ? "+" : "−"}{fmt(t.amount)}
-                  </span>
-                </div>
-                <div className="text-xs text-stone-500 flex items-center gap-1.5 mt-0.5">
-                  <Calendar size={12} /> {shortDate(t.date)} · {mem?.name || "—"}
-                  {t.paidFrom?.length > 0 && (
-                    <span className="truncate"> · paid by {t.paidFrom.map((p) => data.members.find((m) => m.id === p.memberId)?.name).join(", ")}</span>
-                  )}
-                  {t.placeId && (data.places || []).find((p) => p.id === t.placeId) && (
-                    <span className="truncate"> · {data.places.find((p) => p.id === t.placeId)?.name}</span>
-                  )}
-                </div>
-                {t.updatedAt && (
-                  <div className="text-[11px] text-stone-400 mt-0.5">
-                    {t.updatedAt !== t.createdAt ? "Last modified" : "Added"} {fmtStamp(t.updatedAt)}
-                  </div>
-                )}
+        {(() => {
+          const groups = [];
+          filteredTx.forEach((t) => { const g = groups[groups.length - 1]; if (g && g.date === t.date) g.items.push(t); else groups.push({ date: t.date, items: [t] }); });
+          const yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return localISO(d); })();
+          return groups.map((g) => (
+            <div key={g.date} className="space-y-2">
+              <div className="flex items-center justify-between px-1 pt-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">{g.date === todayISO() ? "Today" : g.date === yest ? "Yesterday" : shortDate(g.date)}</span>
+                <span className="text-xs font-mono text-stone-500 tabular-nums">{isIncome ? "+" : "−"}{fmt(g.items.reduce((x, t) => x + t.amount, 0))}</span>
               </div>
-              <button onClick={() => onEdit(t)} className="text-stone-300 hover:text-indigo-700 p-1" title="Edit / correct">
-                <Pencil size={15} />
-              </button>
-              <button onClick={() => onDelete(t.id)} className="text-stone-300 hover:text-rose-600 p-1" title="Delete">
-                <Trash2 size={15} />
-              </button>
-            </Card>
-          );
-        })}
+              {g.items.map((t) => {
+                const cat = data.categories.find((c) => c.id === t.categoryId);
+                const mem = data.members.find((m) => m.id === t.memberId);
+                const place = t.placeId ? (data.places || []).find((pl) => pl.id === t.placeId) : null;
+                return (
+                  <Card key={t.id} className="p-3.5 flex items-center gap-3">
+                    {cat ? <IconBadge iconName={cat.icon} color={cat.color} /> : <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 shrink-0"><ArrowUpRight size={18} /></div>}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[15px] font-medium truncate">{t.note || (t.type === "income" ? "Income" : cat?.name)}</span>
+                        <span className={`font-mono text-sm font-semibold tabular-nums shrink-0 ${t.type === "income" ? "text-emerald-700" : "text-rose-700"}`}>{t.type === "income" ? "+" : "−"}{fmt(t.amount)}</span>
+                      </div>
+                      <div className="text-xs text-stone-500 truncate mt-0.5">
+                        {[t.note && cat ? cat.name : null, mem?.name, place?.name].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                      {t.updatedAt && (
+                        <div className="text-[11px] text-stone-400 mt-0.5">{t.updatedAt !== t.createdAt ? "Last modified" : "Added"} {fmtStamp(t.updatedAt)}</div>
+                      )}
+                    </div>
+                    <button onClick={() => onEdit(t)} className="text-stone-300 hover:text-indigo-700 p-1" title="Edit / correct"><Pencil size={15} /></button>
+                    <button onClick={() => onDelete(t.id)} className="text-stone-300 hover:text-rose-600 p-1" title="Delete"><Trash2 size={15} /></button>
+                  </Card>
+                );
+              })}
+            </div>
+          ));
+        })()}
         {filteredTx.length === 0 && (
           <EmptyState
             title={isIncome ? "No income entries found" : "No transactions found"}
@@ -2404,7 +2414,7 @@ function NewPlaceForm({ onSave, members = [], editing = null }) {
       </Field>
       {!editing && (
         <Field label="Starting balance">
-          <input type="number" className={inputCls} value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0" />
+          <input type="number" step="any" inputMode="decimal" className={inputCls} value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0" />
         </Field>
       )}
       <button
@@ -2426,23 +2436,28 @@ function AdjustPlaceForm({ currentBalance, onSave }) {
   const [mode, setMode] = useState("add");
   const [amount, setAmount] = useState("");
   const amt = Number(amount) || 0;
-  const preview = mode === "add" ? (currentBalance || 0) + amt : (currentBalance || 0) - amt;
+  const cur = currentBalance || 0;
+  const preview = mode === "add" ? cur + amt : mode === "subtract" ? cur - amt : amt;
+  const delta = mode === "add" ? amt : mode === "subtract" ? -amt : amt - cur;
+  const valid = mode === "set" ? amount !== "" && delta !== 0 : !!amt;
   return (
     <div>
-      <div className="flex gap-2 mb-3">
-        <Pill active={mode === "add"} onClick={() => setMode("add")}>+ Add money</Pill>
+      <div className="text-xs text-stone-500 mb-2">Current balance: <span className="font-mono font-semibold text-stone-700">{fmt(cur)}</span></div>
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <Pill active={mode === "add"} onClick={() => setMode("add")}>+ Add</Pill>
         <Pill active={mode === "subtract"} onClick={() => setMode("subtract")}>− Withdraw</Pill>
+        <Pill active={mode === "set"} onClick={() => setMode("set")}>= Set balance</Pill>
       </div>
-      <Field label="Amount">
-        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+      <Field label={mode === "set" ? "New balance" : "Amount"}>
+        <input type="number" step="any" inputMode="decimal" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
       </Field>
-      <p className="text-[11px] text-stone-400 mb-3">New balance will be {fmt(preview)}</p>
+      <p className="text-xs text-stone-500 mb-3">New balance will be {fmt(preview)}</p>
       <button
-        disabled={!amt}
-        onClick={() => onSave(mode === "add" ? amt : -amt)}
-        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+        disabled={!valid}
+        onClick={() => onSave(delta)}
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-3 font-semibold text-sm disabled:opacity-40"
       >
-        {mode === "add" ? "Add to balance" : "Withdraw from balance"}
+        {mode === "add" ? "Add to balance" : mode === "subtract" ? "Withdraw from balance" : "Set balance"}
       </button>
     </div>
   );
@@ -2560,7 +2575,7 @@ function NewAllowanceForm({ onSave, members = [], editing = null }) {
       </Field>
       {!editing && (
         <Field label="Starting amount">
-          <input type="number" className={inputCls} value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0" />
+          <input type="number" step="any" inputMode="decimal" className={inputCls} value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0" />
         </Field>
       )}
       <button
@@ -2587,7 +2602,7 @@ function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCatego
       <Card className="p-4">
         <Field label="Overall monthly budget">
           <input
-            type="number"
+            type="number" step="any" inputMode="decimal"
             className={inputCls}
             value={data.settings.overallBudget}
             onChange={(e) => onUpdateSettings({ overallBudget: Number(e.target.value) })}
@@ -2622,7 +2637,7 @@ function BudgetsTab({ data, categorySpendThisMonth, familyTotals, onUpdateCatego
                 {editing === c.id ? (
                   <input
                     autoFocus
-                    type="number"
+                    type="number" step="any" inputMode="decimal"
                     className="w-24 px-2 py-1.5 rounded-lg border border-stone-300 text-sm font-mono"
                     defaultValue={c.budgetLimit}
                     onBlur={(e) => { onUpdateCategory(c.id, { budgetLimit: Number(e.target.value) }); setEditing(null); }}
@@ -2683,7 +2698,7 @@ function NewCategoryForm({ onSave, compact, editing = null, existingCount = 0 })
         <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Milk, Pet care" />
       </Field>
       <Field label="Monthly budget (₹)">
-        <input type="number" inputMode="numeric" className={inputCls} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
+        <input type="number" step="any" inputMode="decimal" inputMode="numeric" className={inputCls} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
       </Field>
       <Field label="Icon">
         <IconPicker value={icon} color={color} onChange={setIcon} />
@@ -2922,7 +2937,7 @@ function ImportStatementModal({ data, defaultMemberId, onClose, onImport, onAddC
                   {r.splits.map((sp, j) => (
                     <div key={j} className="flex items-center gap-1.5 mt-1.5 pl-3 border-l-2 border-amber-300">
                       <select value={sp.catId} onChange={(e) => setPartCat(r, j, e.target.value)} className="flex-1 min-w-0 text-xs rounded-md border border-stone-300 px-1.5 py-1 bg-white">{catOptions}</select>
-                      <input type="number" inputMode="decimal" placeholder="₹" value={sp.amount} onChange={(e) => setPartAmt(r, j, e.target.value)} className="w-20 text-xs rounded-md border border-stone-300 px-1.5 py-1" />
+                      <input type="number" step="any" inputMode="decimal" placeholder="₹" value={sp.amount} onChange={(e) => setPartAmt(r, j, e.target.value)} className="w-20 text-xs rounded-md border border-stone-300 px-1.5 py-1" />
                       <button type="button" onClick={() => delPart(r, j)} className="text-stone-400 px-1">✕</button>
                     </div>
                   ))}
@@ -2987,8 +3002,11 @@ function DebtsTab({ data, viewMode, selectedMember, paidOnDebt, onAdd, onPay, on
     (d.internal && (d.fromMember === selectedMember.id || d.toMember === selectedMember.id));
 
   const allDebts = data.debts.filter(belongsToPerson);
-  const owedActive = allDebts.filter((d) => d.direction === "owed_to_me" && !settled(d));
-  const oweActive = allDebts.filter((d) => d.direction === "i_owe" && !settled(d));
+  // A family IOU is stored once (borrower -> lender). In a person's view it is "to receive" for the
+  // lender and "to pay" for the borrower.
+  const roleOf = (d) => (d.internal && isPersonView ? (d.toMember === selectedMember.id ? "owed_to_me" : "i_owe") : d.direction);
+  const owedActive = allDebts.filter((d) => roleOf(d) === "owed_to_me" && !settled(d));
+  const oweActive = allDebts.filter((d) => roleOf(d) === "i_owe" && !settled(d));
   const completed = allDebts
     .filter((d) => settled(d))
     .sort((a, b) => debtSettledDate(b, txs).localeCompare(debtSettledDate(a, txs)));
@@ -3058,6 +3076,9 @@ function DebtGroup({ title, tone, debts, paidOnDebt, onPay, onDelete, onSettle, 
                       {tone === "emerald" ? "Lent by" : "Payable by"} {memberName(d.memberId)}
                     </div>
                   )}
+                  {d.internal && (
+                    <div className="text-xs text-stone-500">{memberName(d.fromMember) || "?"} owes {memberName(d.toMember) || "?"}</div>
+                  )}
                   {d.note && <div className="text-xs text-stone-500">{d.note}</div>}
                   {d.dueDate && <div className="text-xs text-stone-500">Due {shortDate(d.dueDate)}</div>}
                 </div>
@@ -3107,7 +3128,7 @@ function SettledDebtCard({ debt: d, paid, settledOn, onDelete, onReopen }) {
           </div>
           {d.note && <div className="text-xs text-stone-500 truncate">{d.note}</div>}
           <div className="text-xs text-stone-500 mt-0.5">
-            <span className={toneText}>{d.direction === "owed_to_me" ? "Received in full" : "Paid in full"}</span>
+            <span className={toneText}>{d.internal ? "Repaid in full" : d.direction === "owed_to_me" ? "Received in full" : "Paid in full"}</span>
             {" · "}{fmt(d.totalAmount)}
             {settledOn ? ` · Cleared ${shortDate(settledOn)}` : ""}
           </div>
@@ -3128,77 +3149,71 @@ function AddDebtModal({ onClose, onSave, members = [] }) {
   const [dueDate, setDueDate] = useState("");
   const [note, setNote] = useState("");
   const [memberId, setMemberId] = useState("");
-
-  const memberName = members.find((m) => m.id === memberId)?.name;
-  const familyLabel = memberName || "your family";
-  const otherLabel = personName || "this person";
-  const amountLabel = totalAmount ? fmt(Number(totalAmount)) : "₹___";
-
-  const summary =
-    direction === "owed_to_me"
-      ? `${otherLabel} needs to pay ${familyLabel} ${amountLabel}`
-      : `${familyLabel} needs to pay ${otherLabel} ${amountLabel}`;
+  const [showMore, setShowMore] = useState(false);
+  const lbl = "block text-xs font-semibold text-stone-500 mb-2 uppercase tracking-wide";
+  const receive = direction === "owed_to_me";
 
   return (
     <Modal title="Add a debt" onClose={onClose}>
-      <Field label="What happened?">
-        <div className="grid grid-cols-1 gap-2">
-          <button
-            onClick={() => setDirection("owed_to_me")}
-            className={`text-left rounded-xl border-2 p-3 transition-colors ${direction === "owed_to_me" ? "border-emerald-600 bg-emerald-50" : "border-stone-200 bg-white"}`}
-          >
-            <div className="text-sm font-semibold text-emerald-700">Someone needs to pay us</div>
-            <div className="text-[11px] text-stone-500">e.g. you gave a loan, or someone needs to pay you back for something</div>
-          </button>
-          <button
-            onClick={() => setDirection("i_owe")}
-            className={`text-left rounded-xl border-2 p-3 transition-colors ${direction === "i_owe" ? "border-rose-600 bg-rose-50" : "border-stone-200 bg-white"}`}
-          >
-            <div className="text-sm font-semibold text-rose-700">We need to pay someone</div>
-            <div className="text-[11px] text-stone-500">e.g. you took a loan, or still need to pay a bill/bank</div>
-          </button>
-        </div>
-      </Field>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button type="button" onClick={() => setDirection("owed_to_me")}
+          className={`rounded-xl border-2 py-3 text-sm font-semibold transition-colors ${receive ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-stone-200 bg-white text-stone-500"}`}>
+          Money to receive
+        </button>
+        <button type="button" onClick={() => setDirection("i_owe")}
+          className={`rounded-xl border-2 py-3 text-sm font-semibold transition-colors ${!receive ? "border-rose-600 bg-rose-50 text-rose-700" : "border-stone-200 bg-white text-stone-500"}`}>
+          Money to pay
+        </button>
+      </div>
 
-      <Field label={direction === "owed_to_me" ? "Who needs to pay this?" : "Who do we need to pay?"}>
-        <input
-          className={inputCls}
-          list="debt-person-suggestions"
-          value={personName}
-          onChange={(e) => setPersonName(e.target.value)}
-          placeholder="Type a name, or pick a family member"
-        />
+      <div className={`rounded-2xl p-4 mb-4 text-center ${receive ? "bg-emerald-50" : "bg-rose-50"}`}>
+        <div className="flex items-center justify-center gap-1">
+          <span className="text-3xl font-mono text-stone-400">₹</span>
+          <input type="number" step="any" inputMode="decimal" autoFocus value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="0"
+            className="w-44 text-4xl font-mono font-semibold text-center bg-transparent outline-none text-stone-800 placeholder:text-stone-300" />
+        </div>
+      </div>
+
+      <Field label={receive ? "Who will pay you?" : "Who do you need to pay?"}>
+        <input className={inputCls} list="debt-person-suggestions" value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Name" />
         <datalist id="debt-person-suggestions">
           {members.map((m) => <option key={m.id} value={m.name} />)}
         </datalist>
       </Field>
 
-      <Field label={direction === "owed_to_me" ? "Which family member gave this / should receive it back?" : "Which family member took this / needs to pay it?"}>
-        <select className={inputCls} value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-          <option value="">Family in general (no one specific)</option>
-          {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      </Field>
-
-      <Field label="Amount">
-        <input type="number" className={inputCls} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} />
-      </Field>
-
-      <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 mb-3 text-sm text-stone-700">
-        <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide block mb-0.5">This will record:</span>
-        {summary}
+      <div className="mb-4">
+        <div className={lbl}>For</div>
+        <div className="flex flex-wrap gap-2">
+          {[{ id: "", name: "Whole family" }, ...members].map((m) => {
+            const sel = memberId === m.id;
+            return (
+              <button key={m.id || "all"} type="button" onClick={() => setMemberId(m.id)}
+                className={`px-3.5 py-1.5 rounded-full border text-sm font-medium transition ${sel ? "bg-indigo-950 text-amber-50 border-indigo-950" : "bg-white text-stone-600 border-stone-300"}`}>
+                {m.name}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <Field label="Due date (optional)">
-        <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-      </Field>
-      <Field label="Note (optional)">
-        <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
-      </Field>
+      <button type="button" onClick={() => setShowMore((v) => !v)} className="text-sm font-semibold text-indigo-950 mb-3">
+        {showMore ? "− Hide note and due date" : "+ Add note or due date"}
+      </button>
+      {showMore && (
+        <div className="mb-2">
+          <Field label="Note">
+            <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+          </Field>
+          <Field label="Due date">
+            <input type="date" className={inputCls} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </Field>
+        </div>
+      )}
+
       <button
         disabled={!personName || !totalAmount}
         onClick={() => onSave({ personName, direction, totalAmount: Number(totalAmount), dueDate, note, memberId: memberId || null })}
-        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40"
+        className="w-full bg-indigo-950 text-amber-50 rounded-xl py-3 font-semibold text-sm disabled:opacity-40"
       >
         Save debt
       </button>
@@ -3225,7 +3240,7 @@ function PayDebtModal({ debt, data, incomeMembers, paidSoFar, onClose, onSave })
   return (
     <Modal title={`Record payment · ${debt.personName}`} onClose={onClose}>
       <Field label="Amount">
-        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input type="number" step="any" inputMode="decimal" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
       {debt.direction === "i_owe" ? (
         <Field label="Paid from">
@@ -3330,7 +3345,7 @@ function AddRecurringModal({ data, incomeMembers, onClose, onSave }) {
         </div>
       </Field>
       <Field label="Amount">
-        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input type="number" step="any" inputMode="decimal" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
       {type === "expense" ? (
         <Field label="Category">
@@ -3346,7 +3361,7 @@ function AddRecurringModal({ data, incomeMembers, onClose, onSave }) {
         </Field>
       )}
       <Field label="Day of month">
-        <input type="number" min={1} max={28} className={inputCls} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} />
+        <input type="number" step="any" inputMode="decimal" min={1} max={28} className={inputCls} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} />
       </Field>
       <Field label="Note">
         <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. House rent" />
@@ -3663,6 +3678,10 @@ function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeM
   const [borrowerId, setBorrowerId] = useState(data.members[1]?.id || data.members[0]?.id || "");
   const [owedAmount, setOwedAmount] = useState("");
 
+  const [showMore, setShowMore] = useState(!!(editing && (editing.placeId || editing.allowanceId)));
+  const dayISO = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return localISO(d); };
+  const lbl = "block text-xs font-semibold text-stone-500 mb-2 uppercase tracking-wide";
+
   const amt = Number(amount) || 0;
 
   const buildPaidFrom = () => {
@@ -3678,22 +3697,35 @@ function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeM
 
   return (
     <Modal title={editing ? (type === "income" ? "Edit income" : "Edit expense") : (type === "income" ? "Add income" : "Add expense")} onClose={onClose}>
-      <Field label="Amount">
-        <input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
-      </Field>
+      {/* amount */}
+      <div className={`rounded-2xl p-4 mb-4 text-center ${type === "income" ? "bg-emerald-50" : "bg-rose-50"}`}>
+        <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${type === "income" ? "text-emerald-700" : "text-rose-700"}`}>{type === "income" ? "Income amount" : "Expense amount"}</div>
+        <div className="flex items-center justify-center gap-1">
+          <span className="text-3xl font-mono text-stone-400">₹</span>
+          <input type="number" step="any" inputMode="decimal" autoFocus value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0"
+            className="w-44 text-4xl font-mono font-semibold text-center bg-transparent outline-none text-stone-800 placeholder:text-stone-300" />
+        </div>
+      </div>
 
+      {/* category grid */}
       {type === "expense" && (
-        <Field label="Category">
-          <div className="flex items-center gap-2">
-            <select className={inputCls} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              {categories.filter((c) => !c.isSystem).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <button
-              type="button"
-              onClick={() => setShowNewCategory((v) => !v)}
-              className="shrink-0 text-xs font-semibold text-indigo-950 bg-amber-400 px-3 py-2.5 rounded-lg flex items-center gap-1"
-            >
-              <Plus size={13} /> New
+        <div className="mb-4">
+          <div className={lbl}>Category</div>
+          <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto pr-0.5">
+            {categories.filter((c) => !c.isSystem).map((c) => {
+              const sel = categoryId === c.id;
+              return (
+                <button key={c.id} type="button" onClick={() => setCategoryId(c.id)}
+                  className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 transition"
+                  style={sel ? { borderColor: c.color, backgroundColor: `${c.color}14` } : { borderColor: "transparent", backgroundColor: "#f5f5f4" }}>
+                  <IconBadge iconName={c.icon} color={c.color} size="sm" />
+                  <span className={`text-xs leading-tight text-center w-full truncate ${sel ? "font-semibold text-stone-900" : "text-stone-600"}`}>{c.name}</span>
+                </button>
+              );
+            })}
+            <button type="button" onClick={() => setShowNewCategory((v) => !v)}
+              className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border-2 border-dashed border-stone-300 text-stone-500">
+              <Plus size={18} /><span className="text-xs">New</span>
             </button>
           </div>
           {showNewCategory && (
@@ -3701,23 +3733,52 @@ function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeM
               <NewCategoryForm existingCount={data.categories.length} onSave={handleAddCategory} compact />
             </div>
           )}
-        </Field>
+        </div>
       )}
 
-      {type === "expense" ? (
-        <Field label="Spent by">
-          <select className={inputCls} value={spentBy} onChange={(e) => setSpentBy(e.target.value)}>
-            {data.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </Field>
-      ) : (
-        <Field label="Income source">
-          <select className={inputCls} value={incomeSource} onChange={(e) => setIncomeSource(e.target.value)}>
-            {incomeMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </Field>
-      )}
+      {/* who */}
+      <div className="mb-4">
+        <div className={lbl}>{type === "expense" ? "Spent by" : "Income source"}</div>
+        <div className="flex flex-wrap gap-2">
+          {(type === "expense" ? data.members : incomeMembers).map((m) => {
+            const sel = (type === "expense" ? spentBy : incomeSource) === m.id;
+            return (
+              <button key={m.id} type="button" onClick={() => (type === "expense" ? setSpentBy(m.id) : setIncomeSource(m.id))}
+                className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border text-sm font-medium transition ${sel ? "bg-indigo-950 text-amber-50 border-indigo-950" : "bg-white text-stone-600 border-stone-300"}`}>
+                <Avatar member={m} size="sm" />{m.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
+      {/* date + note */}
+      <div className="mb-4">
+        <div className={lbl}>Date</div>
+        <div className="flex items-center gap-2">
+          <Pill active={date === dayISO(0)} onClick={() => setDate(dayISO(0))}>Today</Pill>
+          <Pill active={date === dayISO(-1)} onClick={() => setDate(dayISO(-1))}>Yesterday</Pill>
+          <input type="date" className={inputCls + " flex-1 min-w-0"} value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      </div>
+      <Field label="Note">
+        <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional, e.g. milk, auto fare" />
+      </Field>
+
+      {/* more options */}
+      <button type="button" onClick={() => setShowMore((v) => !v)} className="w-full flex items-center justify-between py-3 px-3.5 rounded-xl bg-stone-50 border border-stone-200 mb-3 text-left">
+        <div>
+          <div className="text-sm font-semibold text-stone-700">More options</div>
+          <div className="text-xs text-stone-500">
+            {type === "expense"
+              ? (splitMode === "equal" ? "Paid: split equally" : splitMode === "single" ? `Paid by ${payerMembers.find((m) => m.id === singlePayer)?.name || "?"}` : "Paid: custom split") + " · account, family IOU"
+              : "Account"}
+          </div>
+        </div>
+        <ChevronDown size={18} className={`text-stone-400 transition-transform ${showMore ? "rotate-180" : ""}`} />
+      </button>
+      {showMore && (
+        <div className="mb-2">
       {type === "expense" && (
         <Field label="Paid from whose money">
           <div className="flex gap-2 mb-2 flex-wrap">
@@ -3736,7 +3797,7 @@ function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeM
                 <div key={m.id} className="flex items-center gap-2">
                   <span className="text-xs w-20 truncate">{m.name}</span>
                   <input
-                    type="number"
+                    type="number" step="any" inputMode="decimal"
                     className={inputCls}
                     value={customSplit[m.id]}
                     onChange={(e) => setCustomSplit({ ...customSplit, [m.id]: e.target.value })}
@@ -3778,7 +3839,7 @@ function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeM
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-stone-500 mb-1">Amount owed</label>
-                <input type="number" className={inputCls} value={owedAmount} onChange={(e) => setOwedAmount(e.target.value)} placeholder={`Full amount (${fmt(amt)})`} />
+                <input type="number" step="any" inputMode="decimal" className={inputCls} value={owedAmount} onChange={(e) => setOwedAmount(e.target.value)} placeholder={`Full amount (${fmt(amt)})`} />
               </div>
               {lenderId === borrowerId ? (
                 <p className="text-[11px] text-rose-600">Payer and the person who owes must be different.</p>
@@ -3816,12 +3877,8 @@ function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeM
         </Field>
       )}
 
-      <Field label="Date">
-        <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
-      </Field>
-      <Field label="Note">
-        <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
-      </Field>
+        </div>
+      )}
 
       <button
         disabled={!amt || (type === "expense" && splitMode === "custom" && customSum !== amt) || (type === "expense" && payerMembers.length === 0) || (type === "expense" && !editing && isLoan && lenderId === borrowerId)}
@@ -3850,10 +3907,16 @@ function AddTransactionModal({ type, editingTx, data, defaultCategoryId, incomeM
         }}
         className="w-full bg-indigo-950 text-amber-50 rounded-xl py-2.5 font-semibold text-sm disabled:opacity-40 mt-1"
       >
-        {editing ? "Save changes" : `Save ${type === "income" ? "income" : "expense"}`}
+        {editing ? "Save changes" : `Save ${type === "income" ? "income" : "expense"}`}{amt ? ` · ${fmt(amt)}` : ""}
       </button>
+      {type === "expense" && splitMode === "custom" && amt > 0 && customSum !== amt && (
+        <p className="text-xs text-rose-600 mt-2">The custom split must add up to {fmt(amt)}. Open More options to fix it.</p>
+      )}
+      {type === "expense" && !editing && isLoan && lenderId === borrowerId && (
+        <p className="text-xs text-rose-600 mt-2">For the family IOU, choose two different people in More options.</p>
+      )}
       {type === "expense" && payerMembers.length === 0 && (
-        <p className="text-xs text-rose-600 mt-2">Pehle kam se kam ek family member add karein (top-right avatars → Manage members).</p>
+        <p className="text-xs text-rose-600 mt-2">Add at least one family member first (top-right avatars → Manage members).</p>
       )}
     </Modal>
   );
